@@ -1,0 +1,324 @@
+{
+  "system_name": "AegisGate: High-Throughput Zero-Trust API Security Gateway",
+  "version": "2.4.0",
+  "document_id": "ARCH-SEC-2026-0042",
+  "author": "Ethan Kilmer (Principal Systems Architect)",
+  "date": "2026-11-08",
+  "executive_summary": "AegisGate is a high-throughput, distributed zero-trust API security gateway and policy decision engine designed to secure microservices across multi-region Kubernetes clusters. Operating at Layer 7, AegisGate enforces line-rate mutual TLS (mTLS) termination, cryptographic JWT claim validation, attribute-based access control (ABAC) via Open Policy Agent (OPA), and tamper-evident Kafka audit streaming with sub-5ms p99 latency at 250,000 requests per second.",
+  "architecture_overview": "AegisGate decouples ingress data plane traffic from centralized control and policy evaluation. Traffic enters through edge proxies, executes local token and cryptographic checks against cached keys, evaluates access rules via localized sidecar policy engines, publishes cryptographically signed transaction ledgers to an append-only event stream, and forwards authenticated requests to upstream workload pods.",
+  "components": [
+    {
+      "name": "EdgeIngressRouter",
+      "tier": "Ingress",
+      "description": "Terminates public TLS 1.3 handshakes, enforces IP reputation and token-bucket rate limits, and extracts authorization headers.",
+      "technologies": ["Rust", "Envoy Data Plane", "OpenSSL 3.0", "eBPF / XDP"],
+      "inputs": ["Public HTTPS (Port 443)", "mTLS Client Certificates"],
+      "outputs": ["Internal Multiplexed gRPC / HTTP/2 Streams"],
+      "dependencies": []
+    },
+    {
+      "name": "TokenValidatorService",
+      "tier": "Authentication",
+      "description": "Verifies cryptographic signatures on JWT/PASETO tokens, parses SPIFFE identities, and validates tenant boundaries against JWKS endpoints.",
+      "technologies": ["Go", "SPIFFE/SPIRE", "Ed25519", "AES-256-GCM"],
+      "inputs": ["gRPC Identity Verification Payloads"],
+      "outputs": ["Normalized Identity Context", "Tenant Authorization Claims"],
+      "dependencies": ["EdgeIngressRouter"]
+    },
+    {
+      "name": "PolicyDecisionEngine",
+      "tier": "Authorization",
+      "description": "Evaluates declarative OPA Rego policies against tenant RBAC/ABAC rules using a 2-tier local LRU and Redis cluster cache.",
+      "technologies": ["Open Policy Agent (OPA WebAssembly)", "Redis Cluster", "C++"],
+      "inputs": ["Identity Claims", "Resource URI", "HTTP Method", "Context Attributes"],
+      "outputs": ["Authorization Decision (Allow/Deny)", "Obligations / Header Mutators"],
+      "dependencies": ["TokenValidatorService"]
+    },
+    {
+      "name": "AuditStreamPublisher",
+      "tier": "Observability",
+      "description": "Publishes cryptographically signed, immutable audit records to partitioned Apache Kafka topics for compliance and fraud detection.",
+      "technologies": ["Apache Kafka", "HMAC-SHA256", "Snappy Compression"],
+      "inputs": ["Authorization Decisions", "Request Context Metadata"],
+      "outputs": ["Partitioned Audit Log Topics (Kafka)"],
+      "dependencies": ["PolicyDecisionEngine"]
+    },
+    {
+      "name": "UpstreamWorkloadProxy",
+      "tier": "Egress",
+      "description": "Dispatches validated requests to upstream backend microservice clusters with connection pooling, retry budgets, and circuit breaking.",
+      "technologies": ["gRPC", "HTTP/2", "Netflix Concurrency Limits"],
+      "inputs": ["Authorized Request Payloads", "Tenant Routing Headers"],
+      "outputs": ["Backend Microservice RPCs"],
+      "dependencies": ["PolicyDecisionEngine"]
+    }
+  ],
+  "adrs": [
+    {
+      "id": "ADR-001",
+      "title": "Adopt Rust and Envoy for Gateway Data Plane over Java/Node.js",
+      "status": "ACCEPTED",
+      "date": "2026-01-14",
+      "context": "Our previous ingress proxy was implemented in Java/Netty. Under 150k RPS peak traffic, garbage collection (GC) stop-the-world pauses caused p99 tail latency spikes to exceed 320ms, triggering client-side timeouts. We needed a runtime with zero GC overhead, predictable memory usage, and memory-safe semantics.",
+      "decision": "Re-architect the core edge ingress router in Rust using Envoy's C++ data plane and custom Rust WebAssembly / native filters. Rust provides zero-cost abstractions, deterministic memory deallocation (RAII), and compile-time concurrency safety.",
+      "consequences": {
+        "positive": [
+          "Eliminated all GC pauses, cutting p99 tail latency from 320ms to 4.2ms.",
+          "Reduced memory footprint from 4.8 GiB to 420 MiB per container pod replica.",
+          "Zero vulnerability to memory corruption CVEs (buffer overflows, use-after-free)."
+        ],
+        "negative": [
+          "Increased developer ramp-up time for engineers unfamiliar with the Rust borrow checker.",
+          "CI build and compilation times increased by ~3.5 minutes."
+        ],
+        "neutral": [
+          "Enforced automated Cargo Clippy and ASAN (AddressSanitizer) checks in PR gates."
+        ]
+      },
+      "superseded_by": null
+    },
+    {
+      "id": "ADR-002",
+      "title": "Adopt Append-Only Kafka Streaming for Regulatory Audit Telemetry",
+      "status": "ACCEPTED",
+      "date": "2026-02-02",
+      "context": "Direct synchronous logging of security decisions to relational databases (PostgreSQL) created severe write contention, leading to database connection pool exhaustion and gateway request throttling during traffic bursts.",
+      "decision": "Decouple audit trail generation from synchronous request serving. Security events are pushed asynchronously to an append-only Apache Kafka cluster with tenant-keyed partitioning and HMAC-SHA256 tamper-evident digital signatures.",
+      "consequences": {
+        "positive": [
+          "Complete write isolation: Zero impact on ingress request latency.",
+          "Guaranteed linearizable event ordering per tenant ID partition.",
+          "Replayability: Downstream security analytics and fraud detection systems can rewind and replay logs."
+        ],
+        "negative": [
+          "Audit logs are eventually consistent (typical propagation lag of 120ms to warehouse).",
+          "Requires operational monitoring of Kafka consumer group lag and disk capacity."
+        ],
+        "neutral": [
+          "Configured 14-day retention window on NVMe broker storage."
+        ]
+      },
+      "superseded_by": null
+    },
+    {
+      "id": "ADR-003",
+      "title": "Two-Tier Policy Caching (Local LRU + Redis Cluster) for Sub-Millisecond Auth",
+      "status": "ACCEPTED",
+      "date": "2026-03-10",
+      "context": "Evaluating complex OPA Rego policies against remote Redis instances over the network added an unacceptable 1.8ms network round-trip time per request, exhausting internal VPC connection pools.",
+      "decision": "Implement a 2-tier caching architecture: Tier 1 is an in-memory lock-free LRU cache located directly inside each proxy worker thread (TTL 10s, 95% hit rate). Tier 2 is a centralized Redis cluster for cross-pod synchronization with Redis Pub/Sub for active cache invalidation upon policy updates.",
+      "consequences": {
+        "positive": [
+          "95% of authorization evaluations resolve in local memory in under 80 microseconds.",
+          "Reduced Redis cluster query load by 20x, saving $45,000/yr in cloud caching costs."
+        ],
+        "negative": [
+          "Potential 10-second cache inconsistency window if a Redis invalidation Pub/Sub packet is lost.",
+          "Increased per-pod memory consumption for the L1 cache ring buffer (capped at 64 MiB)."
+        ],
+        "neutral": [
+          "Emergency revocation API bypasses L1 cache via an explicit cache-busting header."
+        ]
+      },
+      "superseded_by": null
+    },
+    {
+      "id": "ADR-004",
+      "title": "Migrate from RSA-2048 to Ed25519 Elliptic Curve Signatures for Microservice Tokens",
+      "status": "ACCEPTED",
+      "date": "2026-04-18",
+      "context": "RSA-2048 cryptographic signature validation consumed 38% of gateway CPU cycles during peak traffic, requiring aggressive pod autoscaling solely for cryptographic verification.",
+      "decision": "Transition all internal service-to-service identity tokens to Ed25519 (EdDSA) elliptic curve signatures. Ed25519 provides equivalent 128-bit cryptographic security with 32-byte public keys and 64-byte signatures, executing signature verification 4.5x faster than RSA-2048.",
+      "consequences": {
+        "positive": [
+          "4.5x faster cryptographic signature verification, reducing gateway CPU utilization by 26%.",
+          "Significantly smaller HTTP Authorization header payload size (saves ~1.2 KiB per request)."
+        ],
+        "negative": [
+          "Legacy client SDKs required upgrading to libraries supporting Edwards-curve Digital Signature Algorithm (RFC 8032)."
+        ],
+        "neutral": [
+          "Dual-verification window maintained for 60 days to allow gradual client SDK migration."
+        ]
+      },
+      "superseded_by": null
+    }
+  ],
+  "threat_model": {
+    "system_name": "AegisGate API Security Gateway",
+    "trust_boundaries": [
+      "Untrusted Public Internet <-> Edge Ingress Router (TLS 1.3 Termination)",
+      "Edge Ingress Router <-> Internal Zero-Trust VPC Network",
+      "Policy Decision Engine <-> Shared Redis Cache / OPA Policy Store",
+      "Audit Stream Publisher <-> Kafka Broker Cluster"
+    ],
+    "security_assumptions": [
+      "Cluster nodes possess hardware-backed TPM 2.0 or SPIRE-issued X.509 SVID certificates.",
+      "Internal Kubernetes control plane and API server communications are isolated over dedicated VPC subnets.",
+      "Network Time Protocol (NTP) daemons maintain cluster clock synchronization within +/- 15ms."
+    ],
+    "threats": [
+      {
+        "id": "THREAT-S-01",
+        "category": "Spoofing",
+        "component": "TokenValidatorService",
+        "title": "Cryptographic Token Forgery via Algorithm Switching or Key Confusion",
+        "description": "An adversary crafts an authorization token with 'alg': 'none' or substitutes an RSA public key into an HMAC verification routine (CVE-2015-9235 style key confusion) to impersonate service accounts.",
+        "risk_level": "CRITICAL",
+        "impact": "Full privilege escalation, unauthorized API access, and cross-tenant data exfiltration.",
+        "mitigation": "TokenValidatorService enforces an explicit algorithm allowlist (Ed25519/ES256 only), strictly prohibits 'none', and isolates public verification keys from symmetric HMAC secret paths.",
+        "mitigation_status": "IMPLEMENTED"
+      },
+      {
+        "id": "THREAT-T-01",
+        "category": "Tampering",
+        "component": "AuditStreamPublisher",
+        "title": "Audit Telemetry Modification or Record Deletion in Transit",
+        "description": "A rogue process inside the VPC intercepts unencrypted gRPC audit records and modifies transaction IDs or amounts before compliance log aggregation.",
+        "risk_level": "HIGH",
+        "impact": "Falsification of regulatory compliance records resulting in SOC2 and PCI-DSS audit failure.",
+        "mitigation": "All audit events are cryptographically hashed using HMAC-SHA256 at the point of origin. Kafka brokers require mutual TLS and enforce strict SASL/SCRAM write-only ACLs on audit topics.",
+        "mitigation_status": "IMPLEMENTED"
+      },
+      {
+        "id": "THREAT-R-01",
+        "category": "Repudiation",
+        "component": "AuditStreamPublisher",
+        "title": "Denial of High-Privilege Administrative Actions",
+        "description": "An authorized administrator performs destructive configuration modifications and claims the action was executed by an automated script or third party.",
+        "risk_level": "MEDIUM",
+        "impact": "Inability to assign legal and security accountability during post-incident forensics.",
+        "mitigation": "Every mutating request requires a signed client certificate containing an immutable SPIFFE ID, tied to non-repudiable audit logs backed by Amazon S3 Object Lock (WORM storage).",
+        "mitigation_status": "IMPLEMENTED"
+      },
+      {
+        "id": "THREAT-I-01",
+        "category": "Information Disclosure",
+        "component": "PolicyDecisionEngine",
+        "title": "Tenant Attribute Leakage via Shared Cache Key Collisions",
+        "description": "Multi-tenant authorization attributes stored in shared Redis memory are accessed by another tenant due to missing or predictable tenant namespace key prefixes.",
+        "risk_level": "CRITICAL",
+        "impact": "Cross-tenant data breach violating GDPR and HIPAA regulations.",
+        "mitigation": "Redis keys are strictly namespaced using cryptographic tenant hash prefixes (e.g., `tenant:<sha256(tenant_id)>:user:<uid>`), with OPA policies enforcing tenant boundary verification at the bytecode level.",
+        "mitigation_status": "IMPLEMENTED"
+      },
+      {
+        "id": "THREAT-D-01",
+        "category": "Denial of Service",
+        "component": "EdgeIngressRouter",
+        "title": "Algorithmic Complexity / Slowloris Connection Exhaustion Attack",
+        "description": "An attacker establishes thousands of slow-writing HTTP/2 streams, holding file descriptors open and exhausting proxy thread pools.",
+        "risk_level": "HIGH",
+        "impact": "Edge gateway becomes unresponsive to legitimate customer requests; SLA breach.",
+        "mitigation": "Strict connection timeouts (idle timeout: 4s, header read timeout: 2s), per-IP connection limits (max 50 concurrent streams), and automatic eBPF/XDP packet dropping for abusive source IPs.",
+        "mitigation_status": "IMPLEMENTED"
+      },
+      {
+        "id": "THREAT-E-01",
+        "category": "Elevation of Privilege",
+        "component": "PolicyDecisionEngine",
+        "title": "RBAC Role Injection via Manipulated Header Propagation",
+        "description": "An external user injects an internal header (e.g. `X-Admin-Role: superuser`) that passes through the edge proxy unfiltered to upstream services.",
+        "risk_level": "CRITICAL",
+        "impact": "Unprivileged external user gains administrative access to internal microservices.",
+        "mitigation": "EdgeIngressRouter sanitizes and strips all `X-*` and internal routing headers from incoming external requests. Internal headers are only populated and forwarded downstream after cryptographic policy verification.",
+        "mitigation_status": "IMPLEMENTED"
+      }
+    ]
+  },
+  "star_stories": [
+    {
+      "id": "STAR-01",
+      "title": "Scaling AegisGate Ingress to 250,000 QPS with Sub-5ms p99 Latency",
+      "competency": "Distributed Systems Architecture & Performance Engineering",
+      "situation": "Our legacy API gateway was suffering from severe tail latency amplification during peak e-commerce sales. p99 latencies exceeded 450ms, memory leaks caused 12 OOM container crashes per week, and downstream microservices were starved of connections.",
+      "task": "As Principal Systems Architect, I was tasked with redesigning the ingress data plane from scratch to sustain 250,000 QPS with p99 latency under 5ms, 99.999% availability, and zero operational downtime during cutover.",
+      "action": "I designed AegisGate around a high-performance Rust and Envoy core. I replaced synchronous relational database logging with an asynchronous Kafka streaming pipeline, implemented a two-tier L1/L2 caching topology that resolved 95% of policy decisions in under 80 microseconds, and replaced RSA-2048 with Ed25519 cryptographic tokens. I orchestrated a 4-week zero-downtime blue/green DNS cutover with automated synthetic canary verification.",
+      "result": "Peak throughput scaled to 260,000 QPS while p99 latency dropped from 450ms to 4.2ms (a 99% improvement). Infrastructure costs dropped by $180,000 annually due to an 85% reduction in container resource consumption, and the gateway achieved 100% uptime over 12 consecutive months.",
+      "metrics": {
+        "Peak Throughput": "260,000 RPS",
+        "p99 Latency": "4.2 ms (down from 450 ms)",
+        "Memory Footprint": "Reduced by 85% per pod",
+        "Annual Cost Savings": "$180,000 / year",
+        "Availability": "99.999% across 4 global regions"
+      },
+      "technical_deep_dive": [
+        "Implemented zero-copy byte buffers using Rust `bytes` crate and Linux `splice()` syscalls.",
+        "Configured SO_REUSEPORT on listening TCP sockets to distribute incoming connections across CPU cores without lock contention.",
+        "Designed adaptive concurrency limits using gradient algorithms to prevent downstream microservice cascading failure."
+      ]
+    },
+    {
+      "id": "STAR-02",
+      "title": "Mitigating Zero-Day Algorithmic DoS Attack Under Active Exploitation",
+      "competency": "Incident Response, Security Hardening & Crisis Management",
+      "situation": "At 02:15 UTC, an unknown botnet launched a coordinated slow-read HTTP/2 stream multiplexing attack against our edge gateways. Over 300,000 open connections exhausted file descriptor tables across 8 Kubernetes clusters, threatening total system blackout.",
+      "task": "I was designated Incident Commander with the objective of identifying the attack vector, restoring gateway stability within 15 minutes, and implementing permanent architectural defenses.",
+      "action": "Within 4 minutes of triage, I identified that the attacker was abusing HTTP/2 SETTINGS frame flow-control windows. I pushed an immediate emergency eBPF filter at the Linux kernel layer to drop malformed TCP streams before socket allocation. Within 2 hours, I codified this mitigation into an automated rate-limiting filter with dynamic connection shedding and added automated synthetic regression tests.",
+      "result": "Restored 100% gateway responsiveness in 9 minutes with zero legitimate user sessions terminated. Published a formal post-mortem, upstreamed the fix to our open-source proxy layer, and eliminated the attack vector permanently.",
+      "metrics": {
+        "Mean Time to Detect (MTTD)": "4 minutes",
+        "Mean Time to Resolve (MTTR)": "9 minutes",
+        "Legitimate Traffic Impact": "0% session loss",
+        "Post-Mortem Action Items": "100% completed within 72 hours"
+      },
+      "technical_deep_dive": [
+        "Used `bpftrace` and `perf` in production to isolate kernel lock contention on `epoll_wait`.",
+        "Engineered Linux XDP (eXpress Data Path) hooks to drop hostile packets directly at the network interface card (NIC) driver level.",
+        "Updated Chaos Engineering test suites to continuously simulate slow-read stream attacks."
+      ]
+    }
+  ],
+  "defense_qa": [
+    {
+      "question": "What happens if the PolicyDecisionEngine cluster crashes or undergoes a network partition?",
+      "answer": "We enforce a fail-secure architecture with local sidecar caching. Each edge proxy retains a read-only local L1 LRU cache of authorization decisions with a 10-second TTL. If the centralized decision engine is unreachable, the proxy continues to serve cached valid sessions. For un-cached or state-mutating requests (e.g. POST/PUT/DELETE), the gateway immediately returns HTTP 503 (Service Unavailable). We explicitly reject 'fail-open' semantics, because in a security gateway, failing open allows an attacker to intentionally DoS the policy engine to bypass all access controls.",
+      "anti_pattern_to_avoid": "Do not answer 'we fail-open to preserve user experience'. In financial, healthcare, or security systems, failing open is a catastrophic architectural defect.",
+      "follow_up_probe": "How do you handle instant session revocation when an employee is terminated if the L1 cache has a 10-second TTL?"
+    },
+    {
+      "question": "Why did you choose an append-only Kafka streaming ledger instead of direct PostgreSQL writes for audit logging?",
+      "answer": "Direct database writes create tight coupling between request latency and database disk I/O. Under 200k QPS load, synchronous database inserts saturate connection pools and cause transaction lock contention, directly degrading ingress latency. Kafka provides two critical architectural guarantees: First, write isolation—the ingress proxy emits an asynchronous in-memory event in <50 microseconds without waiting for disk fsync. Second, linearizable partition ordering with replayability—if downstream compliance indexing systems fail, the audit log remains durable on Kafka brokers and can be replayed without data loss.",
+      "anti_pattern_to_avoid": "Failing to mention the operational complexity of running Kafka (zoo/KRaft quorum, consumer lag monitoring, and eventual consistency lag).",
+      "follow_up_probe": "How do you guarantee that an audit event is not lost if a gateway node suddenly experiences power failure before flushing to Kafka?"
+    },
+    {
+      "question": "How do you defend against 'thundering herd' when a high-traffic cache key expires?",
+      "answer": "We utilize singleflight mutex coalescing combined with probabilistic early cache expiration (XFetch algorithm). When a cache key expires, only one worker thread is permitted to recompute the policy decision or fetch the updated token, while concurrent requests wait on a shared promise or serve the slightly stale cache entry for a 500ms grace period. This guarantees that backend policy engines experience exactly one query instead of 50,000 simultaneous hits.",
+      "anti_pattern_to_avoid": "Suggesting simple locking without timeouts, which introduces deadlock risk across distributed worker threads.",
+      "follow_up_probe": "What is the mathematical formulation of the XFetch algorithm, and how does beta tuning affect early recomputation?"
+    }
+  ],
+  "verification_gates": [
+    {
+      "name": "Deterministic Whitepaper Cryptographic Hash Gate",
+      "command_or_rule": "python3 -m docforge verify-hash -f docs/WHITEPAPER.md",
+      "acceptance_criteria": "SHA-256 fingerprint matches computed document content exactly.",
+      "failure_action": "Block Merge & Pull Request"
+    },
+    {
+      "name": "DAG Architecture Cycle Detection Gate",
+      "command_or_rule": "python3 -m docforge validate -i examples/sample_project.json",
+      "acceptance_criteria": "Zero cyclic dependencies detected in component dependency graph.",
+      "failure_action": "Fail CI Pipeline"
+    },
+    {
+      "name": "STRIDE Critical Vulnerability Mitigation Gate",
+      "command_or_rule": "python3 -m docforge validate -i examples/sample_project.json",
+      "acceptance_criteria": "100% of CRITICAL and HIGH severity threats possess implemented mitigations.",
+      "failure_action": "Block Production Release"
+    },
+    {
+      "name": "ADR Lifecycle Reference Gate",
+      "command_or_rule": "python3 -m docforge validate -i examples/sample_project.json",
+      "acceptance_criteria": "All SUPERSEDED ADRs reference valid successor IDs with zero circular links.",
+      "failure_action": "Fail Architecture Review"
+    }
+  ],
+  "metadata": {
+    "environment": "Multi-Region Cloud (AWS / GCP / Bare-Metal)",
+    "compliance_standards": "SOC2 Type II, ISO 27001, PCI-DSS Level 1, FedRAMP High",
+    "repository": "https://github.com/Ethan-da-Tech-Wizard/deterministic-doc-forge",
+    "classification": "Confidential / Production Architecture"
+  }
+}
