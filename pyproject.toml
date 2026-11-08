@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "deterministic-doc-forge"
+version = "1.0.0"
+description = "Zero-dependency deterministic technical documentation engine for generating architectural whitepapers, STRIDE threat models, ADRs, and STAR interview guides."
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [
+    {name = "Ethan Kilmer", email = "ethan@twu.software"}
+]
+keywords = [
+    "architecture",
+    "documentation",
+    "whitepaper",
+    "stride",
+    "threat-modeling",
+    "adr",
+    "interview-prep",
+    "system-design",
+    "reproducible-builds",
+    "dag",
+    "zero-dependency"
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Documentation",
+    "Topic :: Security",
+    "Topic :: Software Development :: Documentation",
+    "Topic :: Software Development :: Build Tools",
+]
+
+[project.urls]
+Homepage = "https://github.com/Ethan-da-Tech-Wizard/deterministic-doc-forge"
+Repository = "https://github.com/Ethan-da-Tech-Wizard/deterministic-doc-forge"
+"Issue Tracker" = "https://github.com/Ethan-da-Tech-Wizard/deterministic-doc-forge/issues"
+
+[project.scripts]
+docforge = "docforge.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["docforge*"]
