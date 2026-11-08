@@ -5,7 +5,7 @@
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-3776ab.svg?style=flat&logo=python&logoColor=white)](https://www.python.org/)
 [![Dependencies](https://img.shields.io/badge/dependencies-zero%20(stdlib%20only)-success.svg?style=flat)](#)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg?style=flat)](LICENSE)
-[![Build Status](https://img.shields.io/badge/tests-22%20passed%20%7C%20100%25-brightgreen.svg?style=flat)](#)
+[![Build Status](https://img.shields.io/badge/tests-28%20passed%20%7C%20100%25-brightgreen.svg?style=flat)](#)
 [![Security: STRIDE](https://img.shields.io/badge/security-STRIDE%20threat%20modeled-blueviolet.svg?style=flat)](#)
 [![CI/CD: SHA--256 Verified](https://img.shields.io/badge/CI%2FCD-SHA--256%20gated-orange.svg?style=flat)](#)
 
@@ -13,22 +13,19 @@
 
 ## ⚡ The Problem: Architecture Documentation Rot & Interview Amnesia
 
-In software engineering, documentation suffers from three fatal problems:
-1. **Architectural Archeology:** Teams reverse good architectural decisions because the historical context, constraints, and evaluated alternatives were never formally recorded in Architectural Decision Records (ADRs).
-2. **Security Compliance Theater:** Threat models are created as stale slide decks during initial audits, completely detached from codebase realities and CI/CD pipelines.
-3. **The "Staff-Plus Interview Wall":** Senior and Lead engineers who design and ship complex distributed systems often struggle to defend their systems during high-stakes technical interviews (L5/L6/L7 panels, Architecture Review Boards, CISO reviews) because their accomplishments aren't structured into quantified STAR narratives and rapid-fire trade-off defenses.
+In software engineering and distributed infrastructure systems, documentation suffers from three fatal problems:
+1. **Architectural Archeology & Decision Drift:** Engineering teams reverse sound architectural decisions because the historical context, forces, constraints, and evaluated alternatives were never formally recorded in Architectural Decision Records (ADRs).
+2. **Security Compliance Theater:** Threat models are created as stale slide decks during initial security reviews, completely detached from codebase realities, container definitions, and CI/CD pipelines.
+3. **The "Staff-Plus Interview Wall":** Senior, Staff, and Principal engineers who design and ship complex distributed systems often struggle to defend their systems during high-stakes technical interviews (L5/L6/L7 panels, Architecture Review Boards, CISO audits) because their accomplishments aren't structured into quantified STAR narratives (Situation, Task, Action, Result) and rapid-fire trade-off defenses.
+4. **AI Non-Determinism & Hallucinations:** Relying on probabilistic Large Language Models (LLMs) to generate compliance documentation introduces fatal vulnerabilities: hallucinations of non-existent APIs, variable output across builds, external SaaS subscription costs, rate limits, and intellectual property exposure.
 
-**DocForge solves this with code.**
+**DocForge solves this deterministically with code.**
 
-DocForge takes a structured JSON specification of your system and **deterministically compiles** it into:
-- 📄 **Formal Architectural Whitepapers** with Document IDs, component inventories, and verification gates.
-- 📐 **Directed Acyclic Graph (DAG) Topologies** rendered in both **pure ASCII box art** and **Mermaid flowcharts**.
-- 🛡️ **Formal STRIDE Threat Models** (Spoofing, Tampering, Repudiation, Information Disclosure, Denial of Service, Elevation of Privilege) with automated risk weights and mitigation matrices.
-- 📋 **Michael Nygard ADR Logs** with lifecycle validation and circular supersede detection.
-- 🎯 **Amazon STAR Interview Guides & Technical Defense Q&A** with quantified metrics (throughput, p99 latency, cost) and traps to avoid.
-- 🔒 **Cryptographic SHA-256 Fingerprinting** so any manual tampering fails CI/CD verification gates.
+DocForge operates in two complementary modes:
+1. **Static AST & Repository Inspection (`scripts/twu_docgen.py`):** Automatically scans Dockerfiles, GitHub Actions CI workflows, and Python AST trees without model calls or third-party dependencies, generating audit-ready whitepapers, STRIDE matrices, and STAR talking points.
+2. **Specification-Driven Architecture Compiler (`docforge` package):** Takes a structured JSON specification of your system and deterministically compiles it into formal whitepapers, ASCII & Mermaid DAG diagrams, Michael Nygard ADR logs, STRIDE threat matrices, and Amazon STAR defense guides with SHA-256 cryptographic verification stamps.
 
-**Best of all? Zero external dependencies. Pure Python 3 standard library.** Anyone with Python 3.9+ can clone and run it instantly.
+**100% Zero External Dependencies. Pure Python 3 Standard Library.**
 
 ---
 
@@ -41,18 +38,25 @@ No `pip install`, no virtualenv required:
 git clone https://github.com/Ethan-da-Tech-Wizard/deterministic-doc-forge.git
 cd deterministic-doc-forge
 
-# 2. Run the test suite (100% standard library unittest)
+# 2. Run the complete test suite (28/28 tests passing across modules)
 python3 -m unittest discover -s tests -v
+python3 -m unittest scripts/test_twu_docgen.py -v
 
-# 3. Compile the enterprise sample project
+# 3. Analyze local repository components statically (Zero Model Calls)
+python3 scripts/twu_docgen.py analyze --path .
+
+# 4. Synthesize a whitepaper from your local codebase
+python3 scripts/twu_docgen.py whitepaper --path . --output docs/LOCAL_WHITEPAPER.md
+
+# 5. Compile the enterprise microservice sample project
 python3 -m docforge build -i examples/sample_project.json -o docs/
 ```
 
 This compiles:
-- `docs/WHITEPAPER.md` (Authoritative system architecture whitepaper)
-- `docs/ADR_LOG.md` (Michael Nygard decision log)
+- `docs/WHITEPAPER.md` (Authoritative system architecture whitepaper with Document ID)
+- `docs/ADR_LOG.md` (Michael Nygard decision log with lifecycle validation)
 - `docs/THREAT_MODEL.md` (Full STRIDE risk matrix and mitigation catalog)
-- `docs/STAR_INTERVIEW_GUIDE.md` (L5/L6 behavioral and system defense guide)
+- `docs/STAR_INTERVIEW_GUIDE.md` (L5/L6/L7 behavioral and system defense guide)
 
 ---
 
@@ -81,101 +85,76 @@ DocForge uses **Kahn's Algorithm** to compute topological execution layers, dete
 |        v  [ downstream dependencies / async events ]           |
 |        |                                                       |
 |  Layer 3 (Topological Tier)                                     |
-|  +-- [ AuditStreamPublisher ] [OBSERVABILITY] (Apache Kafka)   |
-|  +-- [ UpstreamWorkloadProxy ] [EGRESS] (gRPC, HTTP/2)         |
+|  +-- [ UpstreamServiceDispatcher ] [BACKEND_GATEWAY]           |
 +----------------------------------------------------------------+
 ```
 
-### 2. STRIDE Threat & Mitigation Matrices
-Categorizes threats across all six STRIDE vectors with qualitative risk scoring:
+### 2. Static AST & Container Inspection (`scripts/twu_docgen.py`)
+Extracts deep architectural signals from codebases without executing them:
+- **Dockerfile Inspection:** Multi-stage build separation (`FROM ... AS builder`), non-root execution (`USER appuser`), container health checks (`HEALTHCHECK`), and exec-form array syntax (`ENTRYPOINT ["bin"]`) preserving POSIX PID 1 signal propagation.
+- **CI/CD Workflow Inspection:** Evaluates GitHub Actions `.github/workflows/*.yml` for shift-left DevSecOps security tools (ShellCheck, Bandit AST SAST, Aqua Security Trivy, YARA rule validation, SPDX-JSON SBOM generation) and Python test matrices.
+- **Python AST Inspection:** Utilizes Python's `ast.parse()` module to safely extract module docstrings, detect socket listener bindings, identify Linux cgroup/namespace sandboxing, and flag signature scanning engines without executing untrusted code.
 
-| ID | Category | Target Component | Threat Scenario | Risk Level | Mitigation Status |
-|:---|:---|:---|:---|:---:|:---:|
-| **THREAT-S-01** | _Spoofing_ | `TokenValidatorService` | Cryptographic Token Forgery via Key Confusion | `CRITICAL` | **IMPLEMENTED** |
-| **THREAT-I-01** | _Information Disclosure_ | `PolicyDecisionEngine` | Tenant Attribute Leakage via Shared Cache Key Collisions | `CRITICAL` | **IMPLEMENTED** |
-| **THREAT-E-01** | _Elevation of Privilege_ | `PolicyDecisionEngine` | RBAC Role Injection via Manipulated Header Propagation | `CRITICAL` | **IMPLEMENTED** |
-| **THREAT-D-01** | _Denial of Service_ | `EdgeIngressRouter` | Algorithmic Complexity / Slowloris Connection Exhaustion | `HIGH` | **IMPLEMENTED** |
-| **THREAT-T-01** | _Tampering_ | `AuditStreamPublisher` | Audit Telemetry Modification in Message Pipeline | `HIGH` | **IMPLEMENTED** |
-| **THREAT-R-01** | _Repudiation_ | `AuditStreamPublisher` | Denial of High-Privilege Administrative Actions | `MEDIUM` | **IMPLEMENTED** |
+### 3. Microsoft STRIDE Threat Modeling
+Every component and boundary is evaluated against the 6 STRIDE categories:
+- **S (Spoofing):** Untrusted container ingress, forged tokens, credential theft.
+- **T (Tampering):** Unverified upstream dependencies, modified build artifacts, in-transit payload corruption.
+- **R (Repudiation):** Unaudited administrative actions, missing tamper-proof audit trails.
+- **I (Information Disclosure):** Secret leakage in container layers, verbose stack traces, unencrypted network transit.
+- **D (Denial of Service):** Unbounded resource consumption, CPU starvation, connection exhaustion.
+- **E (Elevation of Privilege):** Container root breakout, host kernel exploitation, insecure sudoers configurations.
 
-### 3. Amazon STAR Interview Guides
-Synthesizes your real system metrics into structured L5/L6 behavioral narratives:
+### 4. Michael Nygard Architectural Decision Records (ADRs)
+Maintains historical engineering decisions:
+- Tracks status transitions: `PROPOSED` -> `ACCEPTED` -> `DEPRECATED` or `SUPERSEDED`.
+- Detects circular supersede references and dangling target IDs during static validation.
+- Records context, decision rationale, and quantified positive/negative trade-offs.
 
-> #### Story [STAR-01]: Scaling AegisGate Ingress to 250,000 QPS with Sub-5ms p99 Latency
-> **Target Competency:** `Distributed Systems Architecture & Performance Engineering`
->
-> **Quantified Impact (The 'R' Metrics):**
-> - **Peak Throughput:** `260,000 RPS`
-> - **p99 Latency:** `4.2 ms (down from 450 ms)`
-> - **Memory Footprint:** `Reduced by 85% per pod`
-> - **Annual Cost Savings:** `$180,000 / year`
-> - **Availability:** `99.999% across 4 global regions`
->
-> **Situation:** Legacy API gateway suffered from severe tail latency amplification during peak e-commerce sales. p99 latencies exceeded 450ms, memory leaks caused 12 OOM crashes weekly...  
-> **Task:** Lead architect mandated to redesign ingress data plane to sustain 250k QPS with p99 < 5ms and 99.999% availability...  
-> **Action:** Engineered high-performance Rust/Envoy core, 2-tier local L1 LRU + Redis cluster cache resolving 95% of auth checks in <80µs, migrated to Ed25519 elliptic curve tokens...  
-> **Result:** Scaled peak throughput to 260k QPS, p99 dropped 99% to 4.2ms, infrastructure costs cut by $180k/yr...
-
-### 4. Technical Defense Q&A
-Equips you to survive adversarial probes during system design reviews:
-
-> **Q: "What happens if the PolicyDecisionEngine cluster crashes or partitions?"**  
-> **Senior Defense:** We enforce a fail-secure architecture with local sidecar caching. Each edge proxy retains a read-only local L1 LRU cache of authorization decisions (TTL 10s). If the centralized decision engine is unreachable, cached valid sessions continue to serve. For un-cached or mutating requests (POST/PUT/DELETE), the gateway immediately returns HTTP 503.  
-> ⚠️ **Trap to Avoid:** Do not answer "we fail-open to preserve user experience". In financial, healthcare, or security systems, failing open is a catastrophic architectural flaw that allows attackers to DoS policy engines to bypass all access controls.
-
-### 5. Cryptographic SHA-256 Audit Stamp
-Every generated document embeds an immutable signature block:
-
-```markdown
----
-<!-- DOCFORGE-SHA256: 0de46d66a02962813a4ccf4c38896eb5f2f054bc2d049b0645745b6c030b388a -->
-**DocForge Cryptographic Audit Stamp:** `SHA256:0de46d66a02962813a4ccf4c38896eb5f2f054bc2d049b0645745b6c030b388a`  
-_Generated deterministically by DocForge. Any manual modification invalidates CI/CD verification._
-```
+### 5. Amazon STAR Technical Defense Interview Guides
+Prepares senior and lead engineers for Staff/Principal (L5/L6/L7) panels, Architecture Review Boards (ARBs), and CISO reviews:
+- **Situation:** Quantified engineering challenges, scale requirements, and business constraints.
+- **Task:** Explicit ownership and architectural goals.
+- **Action:** Deep technical trade-offs, algorithms chosen (e.g. Kahn's DAG sort vs DFS), container hardening, and shift-left gates.
+- **Result:** Quantified metrics (throughput, p99 latency reduction, zero cloud spend, 100% automated test pass rate).
+- **Technical Defense Q&A:** Anticipates challenging interviewer pushbacks with verified technical counterarguments.
 
 ---
 
-## 💻 CLI Reference
+## 🛠️ Command-Line Interface Reference
 
-### 1. `docforge build`
-Compiles an architecture specification into Markdown documentation:
-
+### `scripts/twu_docgen.py` (Static AST Inspector)
 ```bash
-# Build all documents into the docs/ directory
-python3 -m docforge build -i spec.json -o docs/
+# Analyze project structure and print JSON metadata
+python3 scripts/twu_docgen.py analyze --path /path/to/project
 
-# Build only the STRIDE threat model
-python3 -m docforge build -i spec.json -o docs/ --format stride
+# Generate formal technical architecture whitepaper
+python3 scripts/twu_docgen.py whitepaper --path /path/to/project --output docs/WHITEPAPER.md
 
-# Output whitepaper directly to stdout for piping
-python3 -m docforge build -i spec.json --stdout | pandoc -o whitepaper.pdf
+# Generate quickstart runbook with verification commands
+python3 scripts/twu_docgen.py quickstart --path /path/to/project --output docs/QUICKSTART.md
+
+# Generate Architectural Decision Records (ADR log)
+python3 scripts/twu_docgen.py adr --path /path/to/project --output docs/ADR_LOG.md
+
+# Generate Microsoft STRIDE Threat Model
+python3 scripts/twu_docgen.py threat-model --path /path/to/project --output docs/THREAT_MODEL.md
+
+# Generate STAR Method Interview Guide
+python3 scripts/twu_docgen.py star --path /path/to/project --output docs/STAR_GUIDE.md
 ```
 
-### 2. `docforge init`
-Scaffolds a comprehensive, production-grade starter specification:
-
+### `docforge` CLI (Specification-Driven Compiler)
 ```bash
-# Scaffold microservice architecture spec
+# Scaffold a new architecture specification
 python3 -m docforge init -o my_architecture.json
 
-# Force overwrite existing spec
-python3 -m docforge init -o my_architecture.json --force
-```
-
-### 3. `docforge validate`
-Performs static analysis on architecture specifications:
-- Identifies circular dependencies in component graphs (cycles).
-- Detects CRITICAL or HIGH threats lacking concrete mitigations.
-- Catches broken or circular ADR supersede references.
-
-```bash
+# Validate architecture DAG, ADR chains, and STRIDE mitigations
 python3 -m docforge validate -i my_architecture.json
-```
 
-### 4. `docforge verify-hash`
-Validates cryptographic document integrity in CI/CD pipelines. Returns exit code `0` on match, `1` on mismatch or tampering:
+# Compile all documents into a directory
+python3 -m docforge build -i my_architecture.json -o docs/
 
-```bash
+# Verify cryptographic SHA-256 fingerprint in CI/CD
 python3 -m docforge verify-hash -f docs/WHITEPAPER.md
 ```
 
@@ -203,8 +182,10 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Run Test Suite
-        run: python3 -m unittest discover -s tests -v
+      - name: Run Test Suites
+        run: |
+          python3 -m unittest discover -s tests -v
+          python3 -m unittest scripts/test_twu_docgen.py -v
 
       - name: Validate Architecture Specification
         run: python3 -m docforge validate -i examples/sample_project.json
@@ -220,24 +201,30 @@ jobs:
 
 ## 🏛️ Code Architecture & Design Walkthrough
 
-Every single file in DocForge is heavily commented with line-by-line educational breakdowns:
+Every single file in DocForge is exhaustively commented with line-by-line educational breakdowns:
 
 ```
-docforge/
-├── __init__.py      # Package metadata, SemVer, and clean public symbol exports
-├── models.py        # Strongly-typed dataclasses for ArchSpec, ADR, ThreatModel, STAR
-├── engine.py        # Kahn's DAG topological sort, ASCII/Mermaid renderer, SHA-256 hasher
-├── adr.py           # Michael Nygard ADR lifecycle manager & supersede chain validator
-├── stride.py        # Microsoft STRIDE threat analyzer, risk weight scoring, matrix compiler
-├── star.py          # Amazon STAR interview synthesizer & technical defense Q&A formatter
-├── cli.py           # POSIX CLI argument parser, standard streams, exit code dispatching
-└── __main__.py      # Module entrypoint enabling direct `python3 -m docforge` execution
+deterministic-doc-forge/
+├── scripts/
+│   ├── twu_docgen.py         # Static AST analyzer, Dockerfile/CI inspector, Whitepaper generator
+│   └── test_twu_docgen.py    # Unit tests for static analysis and doc generation (6/6 passing)
+├── docforge/
+│   ├── __init__.py           # Package metadata, SemVer, and clean public symbol exports
+│   ├── models.py             # Strongly-typed dataclasses for ArchSpec, ADR, ThreatModel, STAR
+│   ├── engine.py             # Kahn's DAG topological sort, ASCII/Mermaid renderer, SHA-256 hasher
+│   ├── adr.py                # Michael Nygard ADR lifecycle manager & supersede chain validator
+│   ├── stride.py             # Microsoft STRIDE threat analyzer, risk weight scoring, matrix compiler
+│   ├── star.py               # Amazon STAR interview synthesizer & technical defense Q&A formatter
+│   ├── cli.py                # POSIX CLI argument parser, standard streams, exit code dispatching
+│   └── __main__.py           # Module entrypoint enabling direct `python3 -m docforge` execution
+├── tests/
+│   └── test_docforge.py      # Comprehensive test suite covering all modules (22/22 passing)
+├── examples/
+│   └── sample_project.json   # Production-grade enterprise microservice security gateway spec
+├── docs/                     # Compiled documentation artifacts with SHA-256 audit stamps
+├── pyproject.toml            # PEP 517/621 package specification
+└── LICENSE                   # MIT License (c) 2026 Ethan Kilmer <ethan@twu.software>, TWU LLC
 ```
-
-### Key Engineering Patterns Demonstrated:
-1. **Topological Ordering ($O(V + E)$):** Kahn's in-degree decrementing algorithm cleanly separates ingress from deep backend tiers and flags cycles before compilation.
-2. **Canonical Text Normalization:** Multi-platform determinism via unified newline translation (`\r\n` -> `\n`), trailing whitespace trimming, and sorted key hashing.
-3. **Zero Third-Party Attack Surface:** Eliminates `pip` transitive CVEs and supply-chain vulnerabilities in high-security build pipelines.
 
 ---
 
@@ -246,44 +233,21 @@ docforge/
 DocForge comes with an exhaustive unit test suite covering 100% of modules:
 
 ```bash
+# Run docforge engine tests (22 tests)
 python3 -m unittest discover -s tests -v
+
+# Run static AST inspector tests (6 tests)
+python3 -m unittest scripts/test_twu_docgen.py -v
 ```
 
-Output:
-```text
-test_adr_lifecycle_validation_and_cycles ... ok
-test_circular_supersede_detection ... ok
-test_duplicate_adr_id_rejected ... ok
-test_render_summary_table ... ok
-test_cli_build_and_verify_hash ... ok
-test_cli_init_and_validate ... ok
-test_cli_sample_project_json ... ok
-test_canonicalize_and_hash ... ok
-test_embed_and_verify ... ok
-test_tamper_detection ... ok
-test_ascii_and_mermaid_rendering ... ok
-test_cycle_detection ... ok
-test_topological_sort_linear ... ok
-test_adr_instantiation_and_validation ... ok
-test_adr_status_lifecycle ... ok
-test_archspec_full_serialization ... ok
-test_component_validation ... ok
-test_threat_models_and_risk_scoring ... ok
-test_render_defense_qa ... ok
-test_render_star_story ... ok
-test_statistics_and_table_rendering ... ok
-test_unmitigated_critical_threat_flagged ... ok
-
-----------------------------------------------------------------------
-Ran 22 tests in 0.009s
-
-OK
-```
+Total: **28/28 tests passing cleanly with zero warnings.**
 
 ---
 
-## 📜 License
+## 📜 License & Ownership
 
 Distributed under the MIT License. See [LICENSE](LICENSE) for full details.
 
-Built by **Ethan Kilmer** ([ethan@twu.software](mailto:ethan@twu.software)).
+- **Author:** Ethan Kilmer ([ethan@twu.software](mailto:ethan@twu.software))
+- **Organization:** TWU LLC
+- **Copyright:** (c) 2026 Ethan Kilmer <ethan@twu.software>, TWU LLC

@@ -12,6 +12,9 @@ license = {text = "MIT"}
 authors = [
     {name = "Ethan Kilmer", email = "ethan@twu.software"}
 ]
+maintainers = [
+    {name = "TWU LLC", email = "ethan@twu.software"}
+]
 keywords = [
     "architecture",
     "documentation",
