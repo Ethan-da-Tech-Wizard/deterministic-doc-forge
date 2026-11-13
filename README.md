@@ -5,7 +5,7 @@
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-3776ab.svg?style=flat&logo=python&logoColor=white)](https://www.python.org/)
 [![Dependencies](https://img.shields.io/badge/dependencies-zero%20(stdlib%20only)-success.svg?style=flat)](#)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg?style=flat)](LICENSE)
-[![Build Status](https://img.shields.io/badge/tests-28%20passed%20%7C%20100%25-brightgreen.svg?style=flat)](#)
+
 [![Security: STRIDE](https://img.shields.io/badge/security-STRIDE%20threat%20modeled-blueviolet.svg?style=flat)](#)
 [![CI/CD: SHA--256 Verified](https://img.shields.io/badge/CI%2FCD-SHA--256%20gated-orange.svg?style=flat)](#)
 
@@ -19,10 +19,10 @@ In software engineering and distributed infrastructure systems, documentation su
 3. **The "Staff-Plus Interview Wall":** Senior, Staff, and Principal engineers who design and ship complex distributed systems often struggle to defend their systems during high-stakes technical interviews (L5/L6/L7 panels, Architecture Review Boards, CISO audits) because their accomplishments aren't structured into quantified STAR narratives (Situation, Task, Action, Result) and rapid-fire trade-off defenses.
 4. **AI Non-Determinism & Hallucinations:** Relying on probabilistic Large Language Models (LLMs) to generate compliance documentation introduces fatal vulnerabilities: hallucinations of non-existent APIs, variable output across builds, external SaaS subscription costs, rate limits, and intellectual property exposure.
 
-**DocForge solves this deterministically with code.**
+DocForge uses code to generate structured documentation. Generated statements and threat models require human review against the actual system; deterministic output does not establish accuracy or security.
 
 DocForge operates in two complementary modes:
-1. **Static AST & Repository Inspection (`scripts/twu_docgen.py`):** Automatically scans Dockerfiles, GitHub Actions CI workflows, and Python AST trees without model calls or third-party dependencies, generating audit-ready whitepapers, STRIDE matrices, and STAR talking points.
+1. **Static AST & Repository Inspection (`scripts/twu_docgen.py`):** Automatically scans Dockerfiles, GitHub Actions CI workflows, and Python AST trees without model calls or third-party dependencies, generating draft whitepapers, STRIDE matrices, and STAR talking points.
 2. **Specification-Driven Architecture Compiler (`docforge` package):** Takes a structured JSON specification of your system and deterministically compiles it into formal whitepapers, ASCII & Mermaid DAG diagrams, Michael Nygard ADR logs, STRIDE threat matrices, and Amazon STAR defense guides with SHA-256 cryptographic verification stamps.
 
 **100% Zero External Dependencies. Pure Python 3 Standard Library.**
@@ -38,7 +38,7 @@ No `pip install`, no virtualenv required:
 git clone https://github.com/Ethan-da-Tech-Wizard/deterministic-doc-forge.git
 cd deterministic-doc-forge
 
-# 2. Run the complete test suite (28/28 tests passing across modules)
+# 2. Run the unit tests
 python3 -m unittest discover -s tests -v
 python3 -m unittest scripts/test_twu_docgen.py -v
 
@@ -53,7 +53,7 @@ python3 -m docforge build -i examples/sample_project.json -o docs/
 ```
 
 This compiles:
-- `docs/WHITEPAPER.md` (Authoritative system architecture whitepaper with Document ID)
+- `docs/WHITEPAPER.md` (Generated architecture whitepaper with Document ID; review against the actual system)
 - `docs/ADR_LOG.md` (Michael Nygard decision log with lifecycle validation)
 - `docs/THREAT_MODEL.md` (Full STRIDE risk matrix and mitigation catalog)
 - `docs/STAR_INTERVIEW_GUIDE.md` (L5/L6/L7 behavioral and system defense guide)
@@ -105,7 +105,7 @@ Every component and boundary is evaluated against the 6 STRIDE categories:
 - **E (Elevation of Privilege):** Container root breakout, host kernel exploitation, insecure sudoers configurations.
 
 ### 4. Michael Nygard Architectural Decision Records (ADRs)
-Maintains historical engineering decisions:
+Generates records of the engineering decisions supplied in the input:
 - Tracks status transitions: `PROPOSED` -> `ACCEPTED` -> `DEPRECATED` or `SUPERSEDED`.
 - Detects circular supersede references and dangling target IDs during static validation.
 - Records context, decision rationale, and quantified positive/negative trade-offs.
@@ -116,7 +116,7 @@ Prepares senior and lead engineers for Staff/Principal (L5/L6/L7) panels, Archit
 - **Task:** Explicit ownership and architectural goals.
 - **Action:** Deep technical trade-offs, algorithms chosen (e.g. Kahn's DAG sort vs DFS), container hardening, and shift-left gates.
 - **Result:** Quantified metrics (throughput, p99 latency reduction, zero cloud spend, 100% automated test pass rate).
-- **Technical Defense Q&A:** Anticipates challenging interviewer pushbacks with verified technical counterarguments.
+- **Technical Defense Q&A:** Generates possible interview questions and answers that must be checked against the actual work.
 
 ---
 
@@ -220,7 +220,7 @@ deterministic-doc-forge/
 ├── tests/
 │   └── test_docforge.py      # Comprehensive test suite covering all modules (22/22 passing)
 ├── examples/
-│   └── sample_project.json   # Production-grade enterprise microservice security gateway spec
+│   └── sample_project.json   # Example microservice security gateway specification
 ├── docs/                     # Compiled documentation artifacts with SHA-256 audit stamps
 ├── pyproject.toml            # PEP 517/621 package specification
 └── LICENSE                   # MIT License (c) 2026 Ethan Kilmer <ethan@twu.software>, TWU LLC
@@ -230,7 +230,7 @@ deterministic-doc-forge/
 
 ## 🧪 Running Tests
 
-DocForge comes with an exhaustive unit test suite covering 100% of modules:
+DocForge includes unit tests; run them in your environment to see the current results. Coverage and passing tests do not verify every generated claim.
 
 ```bash
 # Run docforge engine tests (22 tests)
@@ -240,7 +240,7 @@ python3 -m unittest discover -s tests -v
 python3 -m unittest scripts/test_twu_docgen.py -v
 ```
 
-Total: **28/28 tests passing cleanly with zero warnings.**
+Test counts and results may change; use the commands above to check the current version.
 
 ---
 
@@ -251,3 +251,4 @@ Distributed under the MIT License. See [LICENSE](LICENSE) for full details.
 - **Author:** Ethan Kilmer ([ethan@twu.software](mailto:ethan@twu.software))
 - **Organization:** TWU LLC
 - **Copyright:** (c) 2026 Ethan Kilmer <ethan@twu.software>, TWU LLC
+
