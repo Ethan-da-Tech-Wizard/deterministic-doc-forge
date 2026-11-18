@@ -1,3 +1,10 @@
+# ==============================================================================
+# Program: adr.py
+# Programmer: Ethan-da-Tech-Wizard
+# Last Modified: November 18, 2026
+# Purpose: Architectural Decision Record (ADR) lifecycle manager and Markdown synthesizer.
+#          Validates ADR relationships, prevents circular supersession chains, and renders logs.
+# ==============================================================================
 """
 DocForge Architectural Decision Record (ADR) Manager
 ===================================================

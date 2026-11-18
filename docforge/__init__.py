@@ -1,3 +1,10 @@
+# ==============================================================================
+# Program: __init__.py
+# Programmer: Ethan-da-Tech-Wizard
+# Last Modified: November 18, 2026
+# Purpose: DocForge package root exposing top-level architecture synthesis engines,
+#          STRIDE threat modeling tools, ADR managers, and STAR interview guide generators.
+# ==============================================================================
 """
 DocForge: Zero-Dependency Deterministic Technical Documentation Engine
 ======================================================================

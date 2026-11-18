@@ -1,3 +1,10 @@
+# ==============================================================================
+# Program: engine.py
+# Programmer: Ethan-da-Tech-Wizard
+# Last Modified: November 18, 2026
+# Purpose: Core document synthesis engine compiling architecture JSON specifications
+#          into formatted whitepapers, topological DAG diagrams, and cryptographic hash manifests.
+# ==============================================================================
 """
 DocForge Core Synthesis Engine & Deterministic Pipeline
 ======================================================
