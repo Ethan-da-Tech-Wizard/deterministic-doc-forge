@@ -1,3 +1,10 @@
+# ==============================================================================
+# Program: __main__.py
+# Programmer: Ethan-da-Tech-Wizard
+# Last Modified: November 18, 2026
+# Purpose: Direct module execution entrypoint for running DocForge via
+#          , delegating arguments to the CLI handler.
+# ==============================================================================
 """
 DocForge Module Execution Entrypoint (`python3 -m docforge`)
 ============================================================
@@ -32,6 +39,7 @@ from __future__ import annotations
 import sys
 from docforge.cli import main
 
+# Step 1: Forward invocation to CLI main entrypoint
 if __name__ == "__main__":
     # Hand off directly to the CLI argument dispatcher and propagate the exit code.
     sys.exit(main())

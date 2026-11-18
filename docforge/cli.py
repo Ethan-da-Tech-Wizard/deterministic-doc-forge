@@ -1,3 +1,10 @@
+# ==============================================================================
+# Program: cli.py
+# Programmer: Ethan-da-Tech-Wizard
+# Last Modified: November 18, 2026
+# Purpose: Command-line interface parser and dispatcher supporting subcommands
+#          including build, init, validate, and verify-hash.
+# ==============================================================================
 """
 DocForge Command-Line Interface (CLI)
 =====================================

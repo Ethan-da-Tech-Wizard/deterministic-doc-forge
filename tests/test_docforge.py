@@ -1,3 +1,10 @@
+# ==============================================================================
+# Program: test_docforge.py
+# Programmer: Ethan-da-Tech-Wizard
+# Last Modified: November 18, 2026
+# Purpose: Exhaustive unit test suite covering 100% of DocForge core features including
+#          domain models, ADR cycles, STRIDE threat matrices, and hash verification.
+# ==============================================================================
 """
 DocForge Exhaustive Unit Test Suite
 ===================================
@@ -248,6 +255,7 @@ class TestDomainModels(unittest.TestCase):
         self.assertEqual(len(restored.verification_gates), 1)
 
 
+# Step 2: Test ADR lifecycle, DAG ordering, and circular dependency checks
 class TestADRManager(unittest.TestCase):
     """
     Tests ADR lifecycle management, circular supersede detection, and table rendering.

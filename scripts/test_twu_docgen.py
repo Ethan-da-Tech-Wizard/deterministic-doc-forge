@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+# ==============================================================================
+# Program: test_twu_docgen.py
+# Programmer: Ethan-da-Tech-Wizard
+# Last Modified: November 18, 2026
+# Purpose: Unit test suite for twu_docgen validating CLI parameter parsing, Markdown
+#          formatting, AST extraction, and cryptographic output hashing.
+# ==============================================================================
 """scripts/test_twu_docgen.py — Unit test suite for twu_docgen.py.
 
 Author: Ethan Kilmer <ethan@twu.software>

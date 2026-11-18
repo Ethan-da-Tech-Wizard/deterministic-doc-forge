@@ -1,3 +1,10 @@
+# ==============================================================================
+# Program: stride.py
+# Programmer: Ethan-da-Tech-Wizard
+# Last Modified: November 18, 2026
+# Purpose: Automated STRIDE threat modeling engine calculating risk priority numbers
+#          and synthesizing security matrices and mitigation coverage tables.
+# ==============================================================================
 """
 DocForge STRIDE Threat Modeling Engine
 ======================================

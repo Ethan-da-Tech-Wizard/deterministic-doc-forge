@@ -1,3 +1,10 @@
+# ==============================================================================
+# Program: models.py
+# Programmer: Ethan-da-Tech-Wizard
+# Last Modified: November 18, 2026
+# Purpose: Strongly-typed dataclass contracts defining components, threats, mitigations,
+#          ADRs, interview defense scenarios, and serialization schemas for DocForge.
+# ==============================================================================
 """
 DocForge Domain Models
 ======================

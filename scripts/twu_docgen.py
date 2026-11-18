@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+# ==============================================================================
+# Program: twu_docgen.py
+# Programmer: Ethan-da-Tech-Wizard
+# Last Modified: November 18, 2026
+# Purpose: Deterministic technical document and whitepaper generator extracting metadata,
+#          container hardening directives, and architecture topologies from source trees.
+# ==============================================================================
 """scripts/twu_docgen.py — Deterministic Technical Document & Whitepaper Generator.
 
 Author: Ethan Kilmer <ethan@twu.software>

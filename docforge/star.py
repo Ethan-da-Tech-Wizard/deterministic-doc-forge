@@ -1,3 +1,10 @@
+# ==============================================================================
+# Program: star.py
+# Programmer: Ethan-da-Tech-Wizard
+# Last Modified: November 18, 2026
+# Purpose: Synthesis engine for Amazon STAR (Situation, Task, Action, Result) interview
+#          guides and technical defense question-and-answer preparation dossiers.
+# ==============================================================================
 """
 DocForge STAR Interview Guide & Technical Defense Engine
 ========================================================
