@@ -1,3 +1,7 @@
+# Program: deterministic-doc-forge - cli.py
+# Programmer: Ethan-da-Tech-Wizard (written with Claude, an AI assistant)
+# Last Modified: 2026-11-18
+# Purpose: Command-line interface with build, init, validate and verify-hash subcommands for DocForge.
 """
 DocForge Command-Line Interface (CLI)
 =====================================

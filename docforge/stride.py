@@ -1,3 +1,7 @@
+# Program: deterministic-doc-forge - stride.py
+# Programmer: Ethan-da-Tech-Wizard (written with Claude, an AI assistant)
+# Last Modified: 2026-11-18
+# Purpose: Implements STRIDE threat analysis, risk scoring and Markdown threat matrix rendering.
 """
 DocForge STRIDE Threat Modeling Engine
 ======================================

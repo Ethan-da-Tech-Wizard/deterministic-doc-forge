@@ -1,3 +1,7 @@
+# Program: deterministic-doc-forge - __init__.py
+# Programmer: Ethan-da-Tech-Wizard (written with Claude, an AI assistant)
+# Last Modified: 2026-11-18
+# Purpose: Package entry point that documents DocForge and exposes its public API, version and metadata.
 """
 DocForge: Zero-Dependency Deterministic Technical Documentation Engine
 ======================================================================

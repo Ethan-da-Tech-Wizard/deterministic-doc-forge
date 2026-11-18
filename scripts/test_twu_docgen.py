@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
+# Program: deterministic-doc-forge - test_twu_docgen.py
+# Programmer: Ethan-da-Tech-Wizard (written with Claude, an AI assistant)
+# Last Modified: 2026-11-18
+# Purpose: Unit tests for twu_docgen.py covering correctness, determinism and error handling.
 """scripts/test_twu_docgen.py — Unit test suite for twu_docgen.py.
 
-Author: Ethan Kilmer <ethan@twu.software>
+Author: Ethan Kilmer
 Organization: TWU LLC
-License: MIT License (c) 2026 Ethan Kilmer <ethan@twu.software>, TWU LLC
+License: MIT License (c) 2026 Ethan Kilmer, TWU LLC
 
 Educational Test Suite Overview:
 ================================

@@ -1,3 +1,7 @@
+# Program: deterministic-doc-forge - star.py
+# Programmer: Ethan-da-Tech-Wizard (written with Claude, an AI assistant)
+# Last Modified: 2026-11-18
+# Purpose: Turns architecture specs into STAR interview stories and technical defense Q&A rendered as Markdown.
 """
 DocForge STAR Interview Guide & Technical Defense Engine
 ========================================================

@@ -1,3 +1,7 @@
+# Program: deterministic-doc-forge - models.py
+# Programmer: Ethan-da-Tech-Wizard (written with Claude, an AI assistant)
+# Last Modified: 2026-11-18
+# Purpose: Defines the dataclass domain models (components, ADRs, threats, STAR stories) with dict conversion helpers.
 """
 DocForge Domain Models
 ======================
@@ -204,6 +208,7 @@ class RiskLevel(str, Enum):
 
     @classmethod
     def from_string(cls, value: str) -> RiskLevel:
+        """Parse text into a member of this enum, falling back to MEDIUM when unrecognised."""
         cleaned = value.strip().upper()
         if cleaned in cls.__members__:
             return cls[cleaned]
@@ -257,6 +262,7 @@ class ThreatItem:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> ThreatItem:
+        """Build a ThreatItem from a plain dict, filling defaults for missing keys."""
         return cls(
             id=str(data.get("id", "THREAT-00")).strip(),
             category=ThreatCategory.from_string(str(data.get("category", "Information Disclosure"))),
@@ -270,6 +276,7 @@ class ThreatItem:
         )
 
     def to_dict(self) -> Dict[str, Any]:
+        """Serialize this ThreatItem into a plain dict suitable for JSON output."""
         return {
             "id": self.id,
             "category": self.category.value,
@@ -295,6 +302,7 @@ class ThreatModel:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> ThreatModel:
+        """Build a ThreatModel from a plain dict, filling defaults for missing keys."""
         raw_threats = data.get("threats", [])
         parsed_threats = [ThreatItem.from_dict(t) for t in raw_threats if isinstance(t, dict)]
         return cls(
@@ -305,6 +313,7 @@ class ThreatModel:
         )
 
     def to_dict(self) -> Dict[str, Any]:
+        """Serialize this ThreatModel into a plain dict suitable for JSON output."""
         return {
             "system_name": self.system_name,
             "trust_boundaries": self.trust_boundaries,
@@ -344,6 +353,7 @@ class STARStory:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> STARStory:
+        """Build a STARStory from a plain dict, filling defaults for missing keys."""
         return cls(
             id=str(data.get("id", "STAR-01")).strip(),
             title=str(data.get("title", "Untitled Story")).strip(),
@@ -357,6 +367,7 @@ class STARStory:
         )
 
     def to_dict(self) -> Dict[str, Any]:
+        """Serialize this STARStory into a plain dict suitable for JSON output."""
         return {
             "id": self.id,
             "title": self.title,
@@ -386,6 +397,7 @@ class STARDefenseQA:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> STARDefenseQA:
+        """Build a STARDefenseQA from a plain dict, filling defaults for missing keys."""
         return cls(
             question=str(data.get("question", "")).strip(),
             answer=str(data.get("answer", "")).strip(),
@@ -394,6 +406,7 @@ class STARDefenseQA:
         )
 
     def to_dict(self) -> Dict[str, Any]:
+        """Serialize this STARDefenseQA into a plain dict suitable for JSON output."""
         return {
             "question": self.question,
             "answer": self.answer,
@@ -419,6 +432,7 @@ class VerificationGate:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> VerificationGate:
+        """Build a VerificationGate from a plain dict, filling defaults for missing keys."""
         return cls(
             name=str(data.get("name", "Unnamed Gate")).strip(),
             command_or_rule=str(data.get("command_or_rule", "")).strip(),
@@ -427,6 +441,7 @@ class VerificationGate:
         )
 
     def to_dict(self) -> Dict[str, Any]:
+        """Serialize this VerificationGate into a plain dict suitable for JSON output."""
         return {
             "name": self.name,
             "command_or_rule": self.command_or_rule,
@@ -459,11 +474,13 @@ class Component:
     dependencies: List[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
+        """Validate fields right after construction and reject an empty name."""
         if not self.name or not self.name.strip():
             raise ValueError("Component must possess a valid, non-empty name.")
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> Component:
+        """Build a Component from a plain dict, filling defaults for missing keys."""
         return cls(
             name=str(data.get("name", "UnnamedComponent")).strip(),
             tier=str(data.get("tier", "Core")).strip(),
@@ -475,6 +492,7 @@ class Component:
         )
 
     def to_dict(self) -> Dict[str, Any]:
+        """Serialize this Component into a plain dict suitable for JSON output."""
         return {
             "name": self.name,
             "tier": self.tier,

@@ -1,3 +1,7 @@
+# Program: deterministic-doc-forge - test_docforge.py
+# Programmer: Ethan-da-Tech-Wizard (written with Claude, an AI assistant)
+# Last Modified: 2026-11-18
+# Purpose: Standard-library unittest suite covering the DocForge models, ADR, STRIDE, STAR, engine and CLI.
 """
 DocForge Exhaustive Unit Test Suite
 ===================================
@@ -254,6 +258,7 @@ class TestADRManager(unittest.TestCase):
     """
 
     def test_duplicate_adr_id_rejected(self) -> None:
+        """Test: duplicate adr id rejected."""
         manager = ADRManager()
         adr1 = ADR(id="ADR-01", title="First", status=ADRStatus.ACCEPTED, date="2026-01-01", context="C", decision="D")
         adr2 = ADR(id="ADR-01", title="Second", status=ADRStatus.PROPOSED, date="2026-01-02", context="C", decision="D")
@@ -262,6 +267,7 @@ class TestADRManager(unittest.TestCase):
             manager.add_adr(adr2)
 
     def test_adr_lifecycle_validation_and_cycles(self) -> None:
+        """Test: adr lifecycle validation and cycles."""
         manager = ADRManager()
         # Missing context and decision
         adr1 = ADR(id="ADR-01", title="First", status=ADRStatus.PROPOSED, date="2026-01-01", context="Short", decision="Short")
@@ -271,6 +277,7 @@ class TestADRManager(unittest.TestCase):
         self.assertTrue(any("insufficient or missing 'decision'" in i for i in issues))
 
     def test_circular_supersede_detection(self) -> None:
+        """Test: circular supersede detection."""
         manager = ADRManager()
         adr1 = ADR(
             id="ADR-01",
@@ -296,6 +303,7 @@ class TestADRManager(unittest.TestCase):
         self.assertTrue(any("Circular supersede cycle detected" in i for i in issues))
 
     def test_render_summary_table(self) -> None:
+        """Test: render summary table."""
         manager = ADRManager()
         adr = ADR(
             id="ADR-01",
@@ -317,6 +325,7 @@ class TestSTRIDEAnalyzer(unittest.TestCase):
     """
 
     def test_unmitigated_critical_threat_flagged(self) -> None:
+        """Test: unmitigated critical threat flagged."""
         tm = ThreatModel(
             system_name="InsecureSys",
             threats=[
@@ -337,6 +346,7 @@ class TestSTRIDEAnalyzer(unittest.TestCase):
         self.assertTrue(any("lacks an actionable mitigation specification" in i for i in issues))
 
     def test_statistics_and_table_rendering(self) -> None:
+        """Test: statistics and table rendering."""
         tm = ThreatModel(
             system_name="SecureSys",
             threats=[
@@ -379,6 +389,7 @@ class TestSTARGuideGenerator(unittest.TestCase):
     """
 
     def test_render_star_story(self) -> None:
+        """Test: render star story."""
         story = STARStory(
             id="STAR-01",
             title="Ingress Overhaul",
@@ -397,6 +408,7 @@ class TestSTARGuideGenerator(unittest.TestCase):
         self.assertIn("Epoll event loop", md)
 
     def test_render_defense_qa(self) -> None:
+        """Test: render defense qa."""
         qa = STARDefenseQA(
             question="Why not fail open?",
             answer="Failing open creates an exploitable security loophole.",
@@ -417,6 +429,7 @@ class TestDAGAndEngine(unittest.TestCase):
     """
 
     def test_topological_sort_linear(self) -> None:
+        """Test: topological sort linear."""
         components = [
             Component(name="C3", tier="DB", description="", dependencies=["C2"]),
             Component(name="C1", tier="Ingress", description="", dependencies=[]),
@@ -427,6 +440,7 @@ class TestDAGAndEngine(unittest.TestCase):
         self.assertEqual(layers, [["C1"], ["C2"], ["C3"]])
 
     def test_cycle_detection(self) -> None:
+        """Test: cycle detection."""
         components = [
             Component(name="ServiceA", tier="Core", description="", dependencies=["ServiceB"]),
             Component(name="ServiceB", tier="Core", description="", dependencies=["ServiceA"]),
@@ -436,6 +450,7 @@ class TestDAGAndEngine(unittest.TestCase):
         self.assertIn("Cyclic dependency detected", cycles[0])
 
     def test_ascii_and_mermaid_rendering(self) -> None:
+        """Test: ascii and mermaid rendering."""
         components = [
             Component(name="Router", tier="Ingress", description="Ingress", dependencies=[]),
             Component(name="Worker", tier="Compute", description="Backend", dependencies=["Router"]),
@@ -456,6 +471,7 @@ class TestCryptographicFingerprinting(unittest.TestCase):
     """
 
     def test_canonicalize_and_hash(self) -> None:
+        """Test: canonicalize and hash."""
         raw_doc = "# Title \r\n\r\nSome content with trailing spaces    \r\n"
         canonical = canonicalize_markdown(raw_doc)
         self.assertNotIn("\r", canonical)
@@ -467,6 +483,7 @@ class TestCryptographicFingerprinting(unittest.TestCase):
         self.assertEqual(h1, h2)
 
     def test_embed_and_verify(self) -> None:
+        """Test: embed and verify."""
         raw_doc = "# Architectural Whitepaper\n\nSystem specification content."
         stamped_doc = embed_fingerprint(raw_doc)
 
@@ -476,6 +493,7 @@ class TestCryptographicFingerprinting(unittest.TestCase):
         self.assertEqual(len(embedded), 64)
 
     def test_tamper_detection(self) -> None:
+        """Test: tamper detection."""
         raw_doc = "# Architectural Whitepaper\n\nOriginal content."
         stamped_doc = embed_fingerprint(raw_doc)
 
@@ -492,13 +510,16 @@ class TestCLIExecution(unittest.TestCase):
     """
 
     def setUp(self) -> None:
+        """Prepare a fresh temporary workspace before each test."""
         self.test_dir = tempfile.mkdtemp(prefix="docforge_test_")
 
     def tearDown(self) -> None:
+        """Remove the temporary workspace after each test."""
         if os.path.exists(self.test_dir):
             shutil.rmtree(self.test_dir)
 
     def test_cli_init_and_validate(self) -> None:
+        """Test: cli init and validate."""
         spec_path = os.path.join(self.test_dir, "test_spec.json")
 
         # 1. Execute `init`
@@ -514,6 +535,7 @@ class TestCLIExecution(unittest.TestCase):
         self.assertEqual(rc, 0)
 
     def test_cli_build_and_verify_hash(self) -> None:
+        """Test: cli build and verify hash."""
         spec_path = os.path.join(self.test_dir, "spec.json")
         out_dir = os.path.join(self.test_dir, "build_out")
 
