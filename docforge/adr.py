@@ -1,3 +1,7 @@
+# Program: deterministic-doc-forge - adr.py
+# Programmer: Ethan-da-Tech-Wizard (written with Claude, an AI assistant)
+# Last Modified: 2026-11-18
+# Purpose: Manages Architectural Decision Record lifecycles, validates supersede chains and renders ADRs as deterministic Markdown.
 """
 DocForge Architectural Decision Record (ADR) Manager
 ===================================================

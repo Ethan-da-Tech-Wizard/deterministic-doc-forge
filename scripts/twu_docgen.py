@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
+# Program: deterministic-doc-forge - twu_docgen.py
+# Programmer: Ethan-da-Tech-Wizard (written with Claude, an AI assistant)
+# Last Modified: 2026-11-18
+# Purpose: Standalone deterministic generator that builds technical documents and whitepapers from structured input.
 """scripts/twu_docgen.py — Deterministic Technical Document & Whitepaper Generator.
 
-Author: Ethan Kilmer <ethan@twu.software>
+Author: Ethan Kilmer
 Organization: TWU LLC
-License: MIT License (c) 2026 Ethan Kilmer <ethan@twu.software>, TWU LLC
+License: MIT License (c) 2026 Ethan Kilmer, TWU LLC
 
 Overview & Educational Architecture:
 ====================================

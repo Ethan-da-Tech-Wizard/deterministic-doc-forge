@@ -1,3 +1,7 @@
+# Program: deterministic-doc-forge - __main__.py
+# Programmer: Ethan-da-Tech-Wizard (written with Claude, an AI assistant)
+# Last Modified: 2026-11-18
+# Purpose: Lets the package run as `python3 -m docforge` by delegating to the CLI main function.
 """
 DocForge Module Execution Entrypoint (`python3 -m docforge`)
 ============================================================

@@ -1,3 +1,7 @@
+# Program: deterministic-doc-forge - engine.py
+# Programmer: Ethan-da-Tech-Wizard (written with Claude, an AI assistant)
+# Last Modified: 2026-11-18
+# Purpose: Core engine that sorts component DAGs, renders ASCII/Mermaid diagrams, assembles whitepapers and embeds or verifies SHA-256 fingerprints.
 """
 DocForge Core Synthesis Engine & Deterministic Pipeline
 ======================================================
