@@ -52,11 +52,16 @@ from docforge.stride import STRIDEAnalyzer
 # Cryptographic Fingerprinting & Hashing Utilities
 # ===========================================================================
 
+# Matches the machine-readable stamp `<!-- DOCFORGE-SHA256: <64 hex> -->`. Group 1 captures the hash.
+# Whitespace is tolerated so hand-reformatted stamps are still recognised.
 FINGERPRINT_TAG_PATTERN = re.compile(
     r"<!--\s*DOCFORGE-SHA256:\s*([0-9a-fA-F]{64})\s*-->"
 )
 
 # Specifically matches only the DocForge audit footer block
+# The footer is three consecutive lines (rule, HTML comment, visible stamp) plus a note. The
+# pattern is anchored with `$` and MULTILINE so only a complete footer at the end is stripped,
+# not similar-looking text in the body.
 AUDIT_FOOTER_PATTERN = re.compile(
     r"\n*---\s*\n"
     r"<!--\s*DOCFORGE-SHA256:\s*[0-9a-fA-F]{64}\s*-->\s*\n"
@@ -75,9 +80,12 @@ def canonicalize_markdown(content: str) -> str:
       4. Strips leading and trailing blank lines to avoid newline variances.
     """
     # 1. Normalize carriage returns
+    # CRLF first, then lone CR, so Windows-edited files hash identically to Unix ones.
     text = content.replace("\r\n", "\n").replace("\r", "\n")
 
     # 2. Remove any pre-existing SHA-256 audit footer or comment tags
+    # Order matters: remove the full footer first, then any stray tag the footer pattern missed.
+    # The hash must never cover its own stamp, otherwise it could not be reproduced.
     text = AUDIT_FOOTER_PATTERN.sub("", text)
     text = FINGERPRINT_TAG_PATTERN.sub("", text)
 
@@ -93,6 +101,7 @@ def calculate_fingerprint(content: str) -> str:
     """
     Computes a deterministic SHA-256 hexadecimal digest of canonicalized Markdown text.
     """
+    # Hash the canonical form (not raw bytes) so cosmetic whitespace differences don't break verification.
     canonical = canonicalize_markdown(content)
     digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     return digest
@@ -104,9 +113,12 @@ def embed_fingerprint(content: str) -> str:
     machine-readable HTML comment stamp and visual verification badge at the end of the document.
     """
     canonical = canonicalize_markdown(content)
+    # Canonicalization is idempotent, so re-canonicalizing inside calculate_fingerprint is safe.
     digest = calculate_fingerprint(canonical)
 
     footer = (
+        # The footer text must stay byte-identical to what AUDIT_FOOTER_PATTERN expects, otherwise
+        # re-canonicalizing a stamped document would no longer strip it.
         f"\n\n---\n"
         f"<!-- DOCFORGE-SHA256: {digest} -->\n"
         f"**DocForge Cryptographic Audit Stamp:** `SHA256:{digest}`  \n"
@@ -122,11 +134,13 @@ def verify_fingerprint(content: str) -> Tuple[bool, str, str]:
     Returns:
         A 3-tuple: (is_valid: bool, embedded_hash: str, computed_hash: str)
     """
+    # A document without any stamp is reported invalid, with an empty embedded hash.
     match = FINGERPRINT_TAG_PATTERN.search(content)
     if not match:
         computed = calculate_fingerprint(content)
         return False, "", computed
 
+    # Lower-case both sides: hex digits may be upper-case in hand-edited stamps.
     embedded_hash = match.group(1).lower()
     computed_hash = calculate_fingerprint(content).lower()
     is_valid = (embedded_hash == computed_hash)
@@ -153,6 +167,7 @@ def topological_sort_components(components: List[Component]) -> Tuple[List[List[
         (layers: List[List[component_names]], cycles: List[str])
     """
     # Map component names to object
+    # Name -> Component lookup; also used to ignore dependencies that point at unknown components.
     comp_map = {c.name: c for c in components}
     in_degree: Dict[str, int] = {c.name: 0 for c in components}
     adj_list: Dict[str, List[str]] = defaultdict(list)
@@ -161,17 +176,21 @@ def topological_sort_components(components: List[Component]) -> Tuple[List[List[
     # If Component A depends on Component B, data/control flows B -> A
     for comp in components:
         for dep in comp.dependencies:
+            # Edge direction is dependency -> dependent (data flows from what you depend on to you).
+            # Unknown dependency names are ignored here rather than raising, so a typo doesn't crash the build.
             if dep in comp_map:
                 adj_list[dep].append(comp.name)
                 in_degree[comp.name] += 1
 
     # Queue of nodes with zero in-degree (root ingress layer)
+    # Seed with every node that depends on nothing (Layer 0).
     queue: deque[str] = deque([name for name, deg in in_degree.items() if deg == 0])
 
     layers: List[List[str]] = []
     processed_count = 0
 
     while queue:
+        # Snapshot the queue length so exactly one whole layer is processed per outer iteration.
         layer_size = len(queue)
         current_layer: List[str] = []
         for _ in range(layer_size):
@@ -185,10 +204,12 @@ def topological_sort_components(components: List[Component]) -> Tuple[List[List[
                     queue.append(neighbor)
 
         # Sort names in layer alphabetically for build determinism
+        # Sorting is what makes the layout deterministic: queue order depends on dict/insertion order.
         layers.append(sorted(current_layer))
 
     # Detect cycles if not all nodes were processed
     cycles: List[str] = []
+    # Anything never reaching in-degree 0 is on, or downstream of, a cycle.
     if processed_count < len(components):
         unresolved = [name for name, deg in in_degree.items() if deg > 0]
         cycles.append(
@@ -210,6 +231,7 @@ def render_ascii_dag(components: List[Component]) -> str:
     comp_map = {c.name: c for c in components}
 
     lines: List[str] = []
+    # Fenced code block so Markdown renderers keep the monospaced box alignment.
     lines.append("```text")
     lines.append("+----------------------------------------------------------------+")
     lines.append("|                SYSTEM COMPONENT TOPOLOGY (DAG)                 |")
@@ -218,6 +240,7 @@ def render_ascii_dag(components: List[Component]) -> str:
     if cycles:
         lines.append("|  [!] WARNING: CYCLIC DEPENDENCY DETECTED                      |")
         for c in cycles:
+            # Truncate to 60 chars and left-pad to 60 so the right border always lines up.
             lines.append(f"|  {c[:60]:<60}  |")
         lines.append("+----------------------------------------------------------------+")
 
@@ -225,6 +248,7 @@ def render_ascii_dag(components: List[Component]) -> str:
         lines.append(f"|  Layer {layer_idx} (Topological Tier)                                     |")
         for comp_name in layer:
             comp = comp_map[comp_name]
+            # Only the first three technologies are shown to keep each row inside the 60-column box.
             tier_badge = f"[{comp.tier.upper()}]"
             techs = f"({', '.join(comp.technologies[:3])})" if comp.technologies else ""
             comp_box = f"+-- [ {comp.name} ] {tier_badge} {techs}"
@@ -234,6 +258,7 @@ def render_ascii_dag(components: List[Component]) -> str:
                 dep_str = f"     Depends on: {', '.join(comp.dependencies)}"
                 lines.append(f"|  {dep_str[:60]:<60}  |")
 
+        # Draw connector arrows between layers only, not after the last one.
         if layer_idx < len(layers) - 1:
             lines.append("|        |                                                       |")
             lines.append("|        v  [ downstream dependencies / async events ]           |")
@@ -257,9 +282,12 @@ def render_mermaid_dag(components: List[Component]) -> str:
 
     # Define nodes with styling based on tier
     comp_map = {c.name: c for c in components}
+    # Sort by name for stable output regardless of input order.
     for comp in sorted(components, key=lambda c: c.name):
         tier_label = f"<small>[{comp.tier}]</small>"
         label = f"<b>{comp.name}</b><br/>{tier_label}"
+        # Mermaid node syntax `Id["label"]`; HTML in the label is supported by GitHub's renderer.
+        # Component names are used verbatim as IDs, so spaces or punctuation would break the diagram.
         lines.append(f"    {comp.name}[\"{label}\"]")
 
     lines.append("")
@@ -269,10 +297,12 @@ def render_mermaid_dag(components: List[Component]) -> str:
     for comp in sorted(components, key=lambda c: c.name):
         for dep in sorted(comp.dependencies):
             if dep in comp_map:
+                # Arrow points from the dependency to the dependent, matching topological_sort_components.
                 lines.append(f"    {dep} -->|consumes / calls| {comp.name}")
                 has_edges = True
 
     if not has_edges:
+        # `%%` is a Mermaid comment; keeps the flowchart valid when there are nodes but no edges.
         lines.append("    %% Standalone components (no explicit dependency edges)")
 
     lines.append("```")
@@ -294,6 +324,7 @@ class DocForgeEngine:
         Initializes the engine with an ingested architecture specification.
         """
         self.spec = spec
+        # Sub-generators are built once up front; each handles an absent section (None/empty) itself.
         self.adr_manager = ADRManager(spec.adrs)
         self.stride_analyzer = STRIDEAnalyzer(spec.threat_model)
         self.star_generator = STARGuideGenerator(spec.star_stories, spec.defense_qa)
@@ -309,6 +340,7 @@ class DocForgeEngine:
         lines.append("| Component Name | Tier / Layer | Technologies | Primary Responsibilities | Dependencies |")
         lines.append("|:---|:---:|:---|:---|:---|")
 
+        # Alphabetical rows for deterministic output.
         for c in sorted(self.spec.components, key=lambda x: x.name):
             techs = ", ".join(c.technologies) if c.technologies else "None"
             deps = ", ".join(c.dependencies) if c.dependencies else "_None (Ingress / Root)_"
@@ -352,6 +384,8 @@ class DocForgeEngine:
         """
         parts: List[str] = []
 
+        # The numbered section headings below ('## 1.' .. '## 6.') are part of the hashed output;
+        # renumbering them changes every fingerprint.
         # 1. Document Header & Metadata Block
         parts.append(f"# Architectural Whitepaper: {self.spec.system_name}")
         parts.append("")
@@ -362,6 +396,7 @@ class DocForgeEngine:
         parts.append(f"| **Principal Author** | {self.spec.author} |")
         parts.append(f"| **Publication Date** | {self.spec.date} |")
         if self.spec.metadata:
+            # Free-form metadata keys appear in sorted order for stability.
             for k, v in sorted(self.spec.metadata.items()):
                 parts.append(f"| **{k.title()}** | {v} |")
         parts.append("")
@@ -414,6 +449,7 @@ class DocForgeEngine:
         parts.append(self.render_verification_gates_section())
 
         # Compile and embed cryptographic fingerprint
+        # Build the body first, then stamp it: the fingerprint must cover the final body text.
         raw_markdown = "\n".join(parts)
         return embed_fingerprint(raw_markdown)
 
@@ -451,6 +487,7 @@ class DocForgeEngine:
         os.makedirs(output_dir, exist_ok=True)
         manifest: Dict[str, str] = {}
 
+        # Filenames are fixed; the CLI and verification gates rely on these exact names.
         artifacts = {
             "WHITEPAPER.md": self.synthesize_whitepaper(),
             "ADR_LOG.md": self.synthesize_adr_log(),
@@ -460,8 +497,11 @@ class DocForgeEngine:
 
         for filename, content in artifacts.items():
             filepath = os.path.join(output_dir, filename)
+            # Written as text with UTF-8; note that on Windows newline translation may turn \n into \r\n,
+            # which canonicalize_markdown normalizes away at verification time.
             with open(filepath, "w", encoding="utf-8") as f:
                 f.write(content)
+            # Hash of the content as generated (stamp excluded by canonicalization), usable as a build manifest.
             manifest[filename] = calculate_fingerprint(content)
 
         return manifest

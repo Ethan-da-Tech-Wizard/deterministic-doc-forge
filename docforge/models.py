@@ -34,6 +34,7 @@ Design Philosophy & Interview Talking Points:
 
 from __future__ import annotations
 
+# Standard library only: json for (de)serialization, dataclasses for the entities, enum for closed vocabularies.
 import json
 from dataclasses import dataclass, field
 from enum import Enum
@@ -44,6 +45,8 @@ from typing import Any, Dict, List, Optional, Tuple
 # Architectural Decision Record (ADR) Enumerations & Entities
 # ===========================================================================
 
+# Mixing in `str` makes members compare equal to their plain string values and
+# serialize to JSON as bare strings.
 class ADRStatus(str, Enum):
     """
     Represents the operational lifecycle state of an Architectural Decision Record.
@@ -66,9 +69,13 @@ class ADRStatus(str, Enum):
         Determines if the architectural decision is currently active and governing production.
         Active decisions must be respected during design reviews and code audits.
         """
+        # PROPOSED counts as active so in-flight decisions are still shown to reviewers; the
+        # other three states are historical.
         return self in (ADRStatus.ACCEPTED, ADRStatus.PROPOSED)
 
 
+# frozen=True: records are immutable after construction, so they are hashable and can be
+# shared safely between the ADR manager, analyzers and engine without defensive copies.
 @dataclass(frozen=True)
 class ADR:
     """
@@ -97,6 +104,7 @@ class ADR:
     date: str
     context: str
     decision: str
+    # default_factory gives each instance its own dict; a bare `= {}` default would be shared (and is rejected by dataclasses).
     consequences: Dict[str, List[str]] = field(default_factory=dict)
     superseded_by: Optional[str] = None
 
@@ -110,6 +118,8 @@ class ADR:
             raise ValueError("ADR must possess a non-empty identifier (e.g., 'ADR-001').")
         if not self.title or not self.title.strip():
             raise ValueError(f"ADR {self.id} must possess a descriptive title.")
+        # Invariant enforced at construction: a SUPERSEDED record must name its successor. Note that
+        # this makes ADRManager's identical lifecycle check a second line of defense, not the first.
         if self.status == ADRStatus.SUPERSEDED and not self.superseded_by:
             raise ValueError(
                 f"ADR {self.id} has status SUPERSEDED but does not specify 'superseded_by'."
@@ -120,6 +130,8 @@ class ADR:
         """
         Constructs an ADR from raw parsed JSON/dictionary data with defensive defaults.
         """
+        # Defensive parsing: unknown/missing statuses fall back to PROPOSED rather than aborting the
+        # whole document build.
         raw_status = data.get("status", "PROPOSED").upper()
         try:
             status = ADRStatus(raw_status)
@@ -127,6 +139,7 @@ class ADR:
             status = ADRStatus.PROPOSED
 
         # Ensure consequences dictionary has normalized lists
+        # Normalize to exactly three list-valued keys so renderers never need to test for missing keys.
         raw_consequences = data.get("consequences", {})
         normalized_consequences: Dict[str, List[str]] = {
             "positive": list(raw_consequences.get("positive", [])),
@@ -135,6 +148,8 @@ class ADR:
         }
 
         return cls(
+            # Every field is coerced with str(...).strip() so stray whitespace or non-string JSON values
+            # cannot change the rendered (and hashed) output unexpectedly.
             id=str(data.get("id", "ADR-000")).strip(),
             title=str(data.get("title", "Untitled Decision")).strip(),
             status=status,
@@ -165,6 +180,7 @@ class ADR:
 # STRIDE Threat Modeling Enumerations & Entities
 # ===========================================================================
 
+# Values are the human-readable STRIDE names because they are printed verbatim in reports.
 class ThreatCategory(str, Enum):
     """
     Microsoft STRIDE Threat Classification Categories.
@@ -188,6 +204,9 @@ class ThreatCategory(str, Enum):
         """
         Normalizes loose user strings (e.g. 'spoofing', 'DoS', 'privilege') to enum members.
         """
+        # Fuzzy matching on stems ('spoof', 'tamp', ...) so inputs like 'DoS' or 'privilege escalation' map
+        # to the right member. Order matters: 'info' is checked before 'denial'/'dos'. Unknown input
+        # defaults to INFORMATION_DISCLOSURE rather than raising.
         cleaned = value.strip().lower()
         if "spoof" in cleaned:
             return cls.SPOOFING
@@ -216,6 +235,8 @@ class RiskLevel(str, Enum):
 
     @classmethod
     def from_string(cls, value: str) -> RiskLevel:
+        # Exact (case-insensitive) match against member names; anything unrecognised becomes MEDIUM,
+        # a neutral middle-of-the-road default.
         cleaned = value.strip().upper()
         if cleaned in cls.__members__:
             return cls[cleaned]
@@ -225,6 +246,7 @@ class RiskLevel(str, Enum):
         """
         Returns numeric rank for sorting threats by severity (highest first).
         """
+        # Higher number = more severe. Used only for sorting (see STRIDEAnalyzer); the gaps are not meaningful.
         weights = {
             RiskLevel.CRITICAL: 5,
             RiskLevel.HIGH: 4,
@@ -232,6 +254,7 @@ class RiskLevel(str, Enum):
             RiskLevel.LOW: 2,
             RiskLevel.INFORMATIONAL: 1,
         }
+        # `.get(..., 0)` is purely defensive; every member is present in the table.
         return weights.get(self, 0)
 
 
@@ -265,6 +288,7 @@ class ThreatItem:
     risk_level: RiskLevel
     impact: str
     mitigation: str
+    # Free-form string rather than an enum; conventional values are IMPLEMENTED, PLANNED, ACCEPTED_RISK.
     mitigation_status: str = "IMPLEMENTED"
 
     @classmethod
@@ -278,6 +302,7 @@ class ThreatItem:
             risk_level=RiskLevel.from_string(str(data.get("risk_level", "MEDIUM"))),
             impact=str(data.get("impact", "")).strip(),
             mitigation=str(data.get("mitigation", "")).strip(),
+            # Upper-cased so comparisons such as == "ACCEPTED_RISK" in stride.py are case-insensitive for input.
             mitigation_status=str(data.get("mitigation_status", "IMPLEMENTED")).strip().upper(),
         )
 
@@ -308,6 +333,7 @@ class ThreatModel:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> ThreatModel:
         raw_threats = data.get("threats", [])
+        # Non-dict entries (null, strings) are skipped silently instead of crashing the parse.
         parsed_threats = [ThreatItem.from_dict(t) for t in raw_threats if isinstance(t, dict)]
         return cls(
             system_name=str(data.get("system_name", "System")).strip(),
@@ -346,6 +372,7 @@ class STARStory:
     """
     id: str
     title: str
+    # Competency is a free-text label used to group stories.
     competency: str  # e.g., "Distributed Systems", "Incident Response", "Performance"
     situation: str
     task: str
@@ -447,6 +474,8 @@ class VerificationGate:
         }
 
 
+# Component names double as graph node IDs and Mermaid identifiers, so they should be
+# single tokens without spaces; `dependencies` must reference other component names.
 @dataclass(frozen=True)
 class Component:
     """
@@ -502,6 +531,7 @@ class Component:
 # Architectural Specification (Root Container)
 # ===========================================================================
 
+# Not frozen (unlike the leaf entities): it is the mutable root that callers may edit before building.
 @dataclass
 class ArchSpec:
     """
@@ -530,6 +560,8 @@ class ArchSpec:
         Parses a nested dictionary specification into a fully validated ArchSpec instance.
         Performs safe type coercion and handles missing or optional sections gracefully.
         """
+        # The same pattern repeats for each section: fetch the raw list (default empty), then build
+        # entities only from dict items so malformed entries are dropped rather than fatal.
         # Parse Components
         raw_components = data.get("components", [])
         components = [Component.from_dict(c) for c in raw_components if isinstance(c, dict)]
@@ -539,6 +571,7 @@ class ArchSpec:
         adrs = [ADR.from_dict(a) for a in raw_adrs if isinstance(a, dict)]
 
         # Parse Threat Model
+        # threat_model is a single optional object, not a list, so absence maps to None.
         raw_tm = data.get("threat_model")
         threat_model = ThreatModel.from_dict(raw_tm) if isinstance(raw_tm, dict) else None
 
@@ -577,6 +610,7 @@ class ArchSpec:
         Loads and parses an ArchSpec directly from a raw JSON string.
         """
         data = json.loads(json_str)
+        # Reject top-level arrays/scalars early with a clear error instead of an AttributeError later.
         if not isinstance(data, dict):
             raise ValueError("Root JSON payload must be an object/dictionary.")
         return cls.from_dict(data)
@@ -586,6 +620,7 @@ class ArchSpec:
         """
         Loads and parses an ArchSpec from a filesystem path using standard UTF-8 encoding.
         """
+        # Explicit UTF-8 avoids platform-dependent default encodings (e.g. cp1252 on Windows).
         with open(filepath, "r", encoding="utf-8") as f:
             return cls.from_json_str(f.read())
 
@@ -615,4 +650,5 @@ class ArchSpec:
         Serializes the specification to a formatted, deterministic JSON string.
         `sort_keys=True` ensures reproducible text ordering.
         """
+        # ensure_ascii=False keeps non-ASCII text readable; sort_keys makes the output byte-stable.
         return json.dumps(self.to_dict(), indent=indent, sort_keys=True, ensure_ascii=False)

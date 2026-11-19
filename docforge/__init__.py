@@ -55,10 +55,14 @@ Package Hierarchy:
 # MAJOR: Incompatible API or CLI flag changes.
 # MINOR: Backwards-compatible feature additions (new output formats, diagram renderers).
 # PATCH: Backwards-compatible bug fixes, doc updates, and performance tuning.
+# Single source of truth for the version string; keep in sync with pyproject.toml.
 __version__: str = "1.0.0"
 __author__: str = "Ethan Kilmer"
 __email__: str = "ethan@twu.software"
 __license__: str = "MIT"
+# Names listed here define the public API (`from docforge import *`). Anything not
+# listed (e.g. canonicalize_markdown, topological_sort_components) is internal-by-convention
+# even though it remains importable from docforge.engine.
 __all__: list[str] = [
     # Top-Level Engine
     "DocForgeEngine",
@@ -104,6 +108,8 @@ from docforge.models import (
     VerificationGate,
 )
 
+# Imports are ordered models -> managers -> engine so there are no circular imports:
+# models has no intra-package deps, managers depend only on models, engine depends on both.
 from docforge.adr import ADRManager
 from docforge.stride import STRIDEAnalyzer
 from docforge.star import STARGuideGenerator

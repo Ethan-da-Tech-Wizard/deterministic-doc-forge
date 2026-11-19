@@ -34,12 +34,16 @@ reusable library logic (`docforge.engine`) from the command-line execution entry
 ensuring clean architectural decoupling.
 """
 
+# Deferred annotation evaluation keeps this module importable on older 3.x interpreters.
 from __future__ import annotations
 
 import sys
+# Absolute import (not relative) so this works whether run as `-m docforge` or as a zipapp.
 from docforge.cli import main
 
 # Step 1: Forward invocation to CLI main entrypoint
 if __name__ == "__main__":
     # Hand off directly to the CLI argument dispatcher and propagate the exit code.
+    # `main()` returns an int exit status; sys.exit turns it into the process exit code
+    # so shells and CI see failures from build/verify subcommands.
     sys.exit(main())

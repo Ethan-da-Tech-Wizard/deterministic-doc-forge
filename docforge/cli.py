@@ -35,6 +35,7 @@ import os
 import sys
 from typing import List, Optional
 
+# Importing from the package root pulls in all re-exports; only the version string is used here.
 from docforge import __version__
 from docforge.engine import (
     DocForgeEngine,
@@ -53,6 +54,9 @@ def generate_starter_template(template_name: str = "microservice") -> dict:
     """
     Returns a comprehensive, ready-to-customize architectural specification dictionary.
     """
+    # NOTE: `template_name` is accepted (and `--template` offers three choices) but this function
+    # currently returns the same single sample spec for every value. Left as-is in this comments-only pass.
+    # The sample is intentionally rich so it exercises every section of the whitepaper.
     return {
         "system_name": "AegisCore Service Mesh",
         "version": "1.0.0",
@@ -77,6 +81,7 @@ def generate_starter_template(template_name: str = "microservice") -> dict:
                 "technologies": ["Rust", "Envoy", "OpenSSL"],
                 "inputs": ["HTTPS Traffic (Port 443)"],
                 "outputs": ["Internal gRPC Stream"],
+                # An empty dependency list marks this as a root (Layer 0) node in the topological layout.
                 "dependencies": [],
             },
             {
@@ -144,6 +149,7 @@ def generate_starter_template(template_name: str = "microservice") -> dict:
                         "Requires strict automated clippy lints in pull request gates."
                     ],
                 },
+                # None = still current; a real ID here would require status SUPERSEDED.
                 "superseded_by": None,
             },
             {
@@ -341,6 +347,7 @@ def handle_build(args: argparse.Namespace) -> int:
     Executes the `build` subcommand: loads specification, compiles Markdown,
     embeds cryptographic fingerprints, and writes artifacts to disk.
     """
+    # Exit-code convention for all handlers: 0 = success, 1 = any failure; errors go to stderr, results to stdout.
     input_path = args.input
     if not os.path.isfile(input_path):
         sys.stderr.write(f"Error: Input specification file '{input_path}' not found.\n")
@@ -348,13 +355,17 @@ def handle_build(args: argparse.Namespace) -> int:
 
     try:
         spec = ArchSpec.from_json_file(input_path)
+    # Deliberately broad: JSON syntax errors, bad types and I/O errors should all become one clean
+    # message and exit code rather than a traceback.
     except Exception as exc:
         sys.stderr.write(f"Error parsing specification '{input_path}': {exc}\n")
         return 1
 
+    # The engine constructs ADR/STRIDE/STAR helpers from the spec once; reused for every artifact.
     engine = DocForgeEngine(spec)
 
     # If stdout flag is passed, emit whitepaper directly to terminal
+    # getattr with a default keeps handlers usable with Namespaces built outside build_parser (e.g. tests).
     if getattr(args, "stdout", False):
         sys.stdout.write(engine.synthesize_whitepaper())
         return 0
@@ -362,11 +373,16 @@ def handle_build(args: argparse.Namespace) -> int:
     output_dir = args.output_dir
     os.makedirs(output_dir, exist_ok=True)
 
+    # `--format` is a comma-separated list; 'all' short-circuits every individual check below.
+    # Unknown format names are silently ignored.
     formats = [f.strip().lower() for f in args.format.split(",")]
     generate_all = "all" in formats
 
+    # filename -> SHA-256, printed as a table at the end so users can record or diff it.
     manifest = {}
 
+    # The four blocks below are identical in shape (synthesize, write UTF-8, record hash); only the
+    # format key, generator method and fixed filename differ.
     if generate_all or "whitepaper" in formats:
         content = engine.synthesize_whitepaper()
         path = os.path.join(output_dir, "WHITEPAPER.md")
@@ -400,6 +416,7 @@ def handle_build(args: argparse.Namespace) -> int:
     sys.stdout.write(f"Target Directory: {os.path.abspath(output_dir)}\n\n")
     sys.stdout.write(f"{'Artifact File':<28} | {'SHA-256 Digest'}\n")
     sys.stdout.write(f"{'-' * 28}-+-{'-' * 64}\n")
+    # Sorted so the summary table is stable between runs.
     for filename, digest in sorted(manifest.items()):
         sys.stdout.write(f"{filename:<28} | {digest}\n")
     sys.stdout.write("\nAll documents cryptographically stamped and verified.\n")
@@ -411,6 +428,7 @@ def handle_init(args: argparse.Namespace) -> int:
     Executes the `init` subcommand: scaffolds a new starter specification JSON file.
     """
     output_path = args.output
+    # Refuse to clobber an existing spec unless --force is given; hand-edited specs are valuable.
     if os.path.exists(output_path) and not getattr(args, "force", False):
         sys.stderr.write(
             f"Error: Target file '{output_path}' already exists. Use --force to overwrite.\n"
@@ -419,11 +437,13 @@ def handle_init(args: argparse.Namespace) -> int:
 
     template_data = generate_starter_template(getattr(args, "template", "microservice"))
 
+    # dirname is '' for a bare filename; only create directories when a parent path was given.
     parent_dir = os.path.dirname(output_path)
     if parent_dir:
         os.makedirs(parent_dir, exist_ok=True)
 
     with open(output_path, "w", encoding="utf-8") as f:
+        # indent=2 keeps the scaffolded spec readable and diff-friendly for hand editing.
         json.dump(template_data, f, indent=2, ensure_ascii=False)
 
     sys.stdout.write(f"Scaffolded new DocForge architecture specification: {os.path.abspath(output_path)}\n")
@@ -447,15 +467,18 @@ def handle_validate(args: argparse.Namespace) -> int:
         sys.stderr.write(f"Validation FAILED: Invalid JSON or schema mismatch: {exc}\n")
         return 1
 
+    # Aggregate across three independent checkers so one run reports everything wrong.
     issues: List[str] = []
 
     # 1. Check DAG topology and cycles
+    # Only the cycle list is used here; layers are discarded.
     layers, cycles = topological_sort_components(spec.components)
     if cycles:
         issues.extend([f"DAG Architecture: {c}" for c in cycles])
 
     # 2. Check ADR lifecycle
     engine = DocForgeEngine(spec)
+    # Prefix each message with its source so CI logs show which check failed.
     adr_issues = engine.adr_manager.validate_lifecycle()
     issues.extend([f"ADR Governance: {i}" for i in adr_issues])
 
@@ -469,6 +492,7 @@ def handle_validate(args: argparse.Namespace) -> int:
     sys.stdout.write(f"Components: {len(spec.components)} | ADRs: {len(spec.adrs)} | Threats: {len(spec.threat_model.threats if spec.threat_model else [])}\n")
     sys.stdout.write("-" * 70 + "\n")
 
+    # Failures print to stderr and return 1 so CI steps fail; the header above went to stdout.
     if issues:
         sys.stderr.write(f"Validation FAILED: Found {len(issues)} critical issue(s):\n")
         for idx, issue in enumerate(issues, 1):
@@ -491,12 +515,14 @@ def handle_verify_hash(args: argparse.Namespace) -> int:
     with open(file_path, "r", encoding="utf-8") as f:
         content = f.read()
 
+    # Both digests are printed even on success so a human can eyeball the match.
     is_valid, embedded_hash, computed_hash = verify_fingerprint(content)
 
     sys.stdout.write(f"\nVerifying Document Integrity: {file_path}\n")
     sys.stdout.write(f"Embedded Digest: {embedded_hash or '<MISSING>'}\n")
     sys.stdout.write(f"Computed Digest: {computed_hash}\n")
 
+    # Covers both a missing stamp (embedded_hash == '') and a content/hash mismatch.
     if not is_valid:
         sys.stderr.write("\nVerification FAILED: Cryptographic hash mismatch!\n")
         sys.stderr.write("The document was manually edited or corrupted after compilation.\n")
@@ -527,9 +553,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Print DocForge version and exit.",
     )
 
+    # dest="subcommand" lets main() detect the no-subcommand case (argparse subparsers are optional by default).
     subparsers = parser.add_subparsers(dest="subcommand", help="Available subcommands")
 
     # 1. 'build' subcommand
+    # NOTE: this local variable shadows the enclosing function's name `build_parser` inside its own
+    # body. It is harmless because the function never refers to itself, but is easy to trip over.
     build_parser = subparsers.add_parser("build", help="Compile specification into Markdown documents.")
     build_parser.add_argument(
         "-i", "--input",
@@ -594,9 +623,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     """
     Main entry point for command-line execution.
     """
+    # Parser is built fresh per call so main(argv) is re-entrant and unit-testable.
     parser = build_parser()
     args = parser.parse_args(argv)
 
+    # No subcommand: show help on stderr and fail, instead of silently doing nothing.
     if not args.subcommand:
         parser.print_help(sys.stderr)
         return 1
@@ -607,6 +638,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return handle_init(args)
     elif args.subcommand == "validate":
         return handle_validate(args)
+    # Dispatch table kept as an explicit if/elif chain; there are only four subcommands.
     elif args.subcommand == "verify-hash":
         return handle_verify_hash(args)
 

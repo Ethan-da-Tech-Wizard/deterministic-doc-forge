@@ -39,6 +39,8 @@ Interview Talking Points & Defense Strategy:
 from __future__ import annotations
 
 from typing import Dict, List, Optional, Tuple
+# Note: `Any` is used in a return annotation below but not imported; this only works because
+# `from __future__ import annotations` stops annotations from being evaluated at runtime.
 from docforge.models import RiskLevel, ThreatCategory, ThreatItem, ThreatModel
 
 
@@ -51,6 +53,7 @@ class STRIDEAnalyzer:
         """
         Initializes the STRIDE analyzer with an optional ThreatModel domain entity.
         """
+        # May be None: the analyzer then degrades gracefully (empty reports) instead of raising.
         self.threat_model = threat_model
 
     def validate_threats(self) -> List[str]:
@@ -69,12 +72,15 @@ class STRIDEAnalyzer:
 
         for threat in self.threat_model.threats:
             # Check high-severity mitigation presence
+            # Only the two top severities are required to carry a real mitigation; lower ones may be deferred.
             if threat.risk_level in (RiskLevel.CRITICAL, RiskLevel.HIGH):
+                # Length floor rejects empty / 'TBD' style mitigations.
                 if not threat.mitigation or len(threat.mitigation.strip()) < 10:
                     issues.append(
                         f"Threat [{threat.id}] ({threat.category.value}) is rated {threat.risk_level.value} "
                         "but lacks an actionable mitigation specification."
                     )
+                # Policy rule: a CRITICAL risk can't simply be accepted by the engineering team.
                 if threat.mitigation_status == "ACCEPTED_RISK" and threat.risk_level == RiskLevel.CRITICAL:
                     issues.append(
                         f"CRITICAL Threat [{threat.id}] marked as ACCEPTED_RISK. "
@@ -98,6 +104,7 @@ class STRIDEAnalyzer:
         if not self.threat_model:
             return {"total": 0, "by_category": {}, "by_risk": {}}
 
+        # Pre-seed every enum value with 0 so the output always lists all six STRIDE categories / all risk levels.
         by_category: Dict[str, int] = {cat.value: 0 for cat in ThreatCategory}
         by_risk: Dict[str, int] = {rl.value: 0 for rl in RiskLevel}
 
@@ -120,6 +127,7 @@ class STRIDEAnalyzer:
             return "_No threats cataloged in threat model._\n"
 
         # Deterministic sorting: by numeric risk weight descending, then threat ID ascending
+        # Highest numeric weight first (negated for ascending sort), ties broken by ID for stable output.
         sorted_threats = sorted(
             self.threat_model.threats,
             key=lambda t: (-t.risk_level.numeric_weight(), t.id)
@@ -147,6 +155,7 @@ class STRIDEAnalyzer:
         if not self.threat_model or not self.threat_model.threats:
             return ""
 
+        # Same ordering as render_matrix_table so the summary and the details line up.
         sorted_threats = sorted(
             self.threat_model.threats,
             key=lambda t: (-t.risk_level.numeric_weight(), t.id)
@@ -162,6 +171,7 @@ class STRIDEAnalyzer:
             sec.append(f"- **Assessed Severity:** `{t.risk_level.value}`")
             sec.append(f"- **Implementation Status:** `{t.mitigation_status}`")
             sec.append("")
+            # Per-threat detail block: narrative, impact, then mitigation as a blockquote for visual emphasis.
             sec.append("**Attack Narrative & Exploitation Mechanism:**")
             sec.append(t.description)
             sec.append("")
@@ -190,7 +200,7 @@ class STRIDEAnalyzer:
         )
         parts.append("")
 
-        # Trust Boundaries
+        # Trust boundaries come first because every threat is anchored to one.
         if self.threat_model.trust_boundaries:
             parts.append("### 1. Identified Trust Boundaries")
             parts.append("Data crossing these logical and physical perimeter boundaries requires explicit validation:")
