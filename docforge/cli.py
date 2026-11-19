@@ -132,11 +132,18 @@ def _microservice_template() -> dict:
     """The original AegisCore sample spec; base for every template."""
     # The sample is intentionally rich so it exercises every section of the whitepaper.
     return {
+
+        # Identity block: system_name feeds the whitepaper title and is repeated in threat_model.system_name,
+        # so renaming the system means changing both (the template builder does this for variants).
         "system_name": "AegisCore Service Mesh",
         "version": "1.0.0",
         "document_id": "RFC-2026-AEGIS",
+        # Author and date come from the spec (never from the system clock), so rebuilding the same spec
+        # produces byte-identical output; both appear in the whitepaper's metadata table.
         "author": "Ethan Kilmer (Lead Systems Architect)",
         "date": "2026-11-08",
+
+        # Narrative sections rendered at the top of WHITEPAPER.md.
         "executive_summary": (
             "AegisCore is a zero-trust distributed service mesh providing sub-millisecond "
             "mutual TLS (mTLS), fine-grained attribute-based access control (ABAC), and "
@@ -147,6 +154,10 @@ def _microservice_template() -> dict:
             "and Upstream Workloads. All traffic is intercepted at Layer 7 by lightweight sidecar proxies, "
             "validated against cryptographic identity tokens, and logged to append-only event ledgers."
         ),
+
+        # Component graph. `dependencies` lists names of components this one calls; engine.topological_sort_components
+        # turns it into execution layers and rejects cycles (see `docforge validate`). The five entries below form
+        # a chain: Ingress -> Identity -> Policy -> {Audit, Upstream}.
         "components": [
             {
                 "name": "EdgeIngressProxy",
@@ -158,6 +169,8 @@ def _microservice_template() -> dict:
                 # An empty dependency list marks this as a root (Layer 0) node in the topological layout.
                 "dependencies": [],
             },
+
+            # Second tier: verifies the caller's cryptographic identity before anything else may run.
             {
                 "name": "IdentityVerificationEngine",
                 "tier": "Security",
@@ -167,6 +180,8 @@ def _microservice_template() -> dict:
                 "outputs": ["Validated Identity Claims"],
                 "dependencies": ["EdgeIngressProxy"],
             },
+
+            # Third tier: authorization. Depends on a verified identity, so it sits one layer below the verifier.
             {
                 "name": "PolicyDecisionEngine",
                 "tier": "Authorization",
@@ -176,6 +191,8 @@ def _microservice_template() -> dict:
                 "outputs": ["Allow / Deny Decision"],
                 "dependencies": ["IdentityVerificationEngine"],
             },
+
+            # Observability leaf: consumes policy decisions and publishes them to the audit stream.
             {
                 "name": "AuditLedgerPublisher",
                 "tier": "Observability",
@@ -185,6 +202,8 @@ def _microservice_template() -> dict:
                 "outputs": ["Audit Topic Events"],
                 "dependencies": ["PolicyDecisionEngine"],
             },
+
+            # Upstream leaf: the protected workload proxy, reached only after a policy decision.
             {
                 "name": "InternalWorkloadProxy",
                 "tier": "Upstream",
@@ -195,6 +214,9 @@ def _microservice_template() -> dict:
                 "dependencies": ["PolicyDecisionEngine"],
             },
         ],
+
+        # Architecture Decision Records. adr.validate_lifecycle requires a SUPERSEDED record to name an existing,
+        # different successor in `superseded_by`; for other statuses the field is ignored (None here).
         "adrs": [
             {
                 "id": "ADR-001",
@@ -226,6 +248,8 @@ def _microservice_template() -> dict:
                 # None = still current; a real ID here would require status SUPERSEDED.
                 "superseded_by": None,
             },
+
+            # Second ADR: shows an ACCEPTED decision with positive, negative and neutral consequences.
             {
                 "id": "ADR-002",
                 "title": "Use Partitioned Kafka Topics for Compliance Audit Streaming",
@@ -255,16 +279,23 @@ def _microservice_template() -> dict:
                 "superseded_by": None,
             },
         ],
+
+        # STRIDE threat model. Each threat names the component it targets (keep these in sync with `components`)
+        # and carries a risk_level plus mitigation_status. `docforge validate` (stride.validate_threats) requires a
+        # mitigation for every HIGH/CRITICAL threat and refuses a CRITICAL threat marked ACCEPTED_RISK.
         "threat_model": {
             "system_name": "AegisCore Service Mesh",
+            # Trust boundaries are the lines an attacker must cross; they become the 'Trust Boundaries' list in THREAT_MODEL.md.
             "trust_boundaries": [
                 "Public Internet <-> Ingress TLS Termination",
                 "Ingress Proxy <-> Internal Service Mesh Network",
                 "Policy Decision Engine <-> Shared Redis Cache",
             ],
+            # Assumptions the analysis relies on; if one stops being true the matching threats must be re-rated.
             "security_assumptions": [
                 "All internal nodes possess valid hardware-backed TPM or SPIFFE mTLS certificates.",
                 "Clock drift across cluster nodes is synchronized via NTP to within 10ms.",
+            # Threat list; ids encode the STRIDE letter (S=Spoofing, T=Tampering, ...) plus a counter.
             ],
             "threats": [
                 {
@@ -319,6 +350,9 @@ def _microservice_template() -> dict:
                 },
             ],
         },
+
+        # STAR (Situation/Task/Action/Result) interview stories, rendered into STAR_INTERVIEW_GUIDE.md;
+        # `metrics` holds the quantified outcomes quoted in the result.
         "star_stories": [
             {
                 "id": "STAR-01",
@@ -355,6 +389,8 @@ def _microservice_template() -> dict:
                 ],
             }
         ],
+
+        # Anticipated tough questions with prepared answers, rendered into the interview guide.
         "defense_qa": [
             {
                 "question": "What happens when the PolicyDecisionEngine cluster crashes or partitions?",
@@ -384,6 +420,9 @@ def _microservice_template() -> dict:
                 "follow_up_probe": "How do you handle load balancing with long-lived HTTP/2 streams across backend replicas?",
             },
         ],
+
+        # CI verification gates documented in the whitepaper: each names the command a pipeline runs, what counts
+        # as success and what to do on failure. The commands are real DocForge subcommands defined below.
         "verification_gates": [
             {
                 "name": "Deterministic Whitepaper Fingerprint Gate",
@@ -404,6 +443,8 @@ def _microservice_template() -> dict:
                 "failure_action": "Reject Security Release",
             },
         ],
+
+        # Free-form key/value metadata; the engine prints these keys in sorted order in the whitepaper's header table.
         "metadata": {
             "environment": "Production Multi-Region Cloud",
             "compliance_standards": "SOC2 Type II, ISO 27001, PCI-DSS Level 1",
@@ -420,6 +461,17 @@ def handle_build(args: argparse.Namespace) -> int:
     """
     Executes the `build` subcommand: loads specification, compiles Markdown,
     embeds cryptographic fingerprints, and writes artifacts to disk.
+
+    Args:
+        args: Parsed namespace with `input` (spec JSON path), `output_dir`, `format`
+            (comma-separated: all, whitepaper, adr, stride, star) and `stdout` (bool).
+
+    Returns:
+        0 on success; 1 if the spec file is missing or cannot be parsed.
+
+    Side effects:
+        Creates `output_dir`, writes up to four Markdown files, and prints a digest table.
+        With `--stdout` nothing is written to disk; the whitepaper goes to stdout only.
     """
     # Exit-code convention for all handlers: 0 = success, 1 = any failure; errors go to stderr, results to stdout.
     input_path = args.input
@@ -444,6 +496,7 @@ def handle_build(args: argparse.Namespace) -> int:
         sys.stdout.write(engine.synthesize_whitepaper())
         return 0
 
+    # Output directory is created on demand so `build` works from a clean checkout.
     output_dir = args.output_dir
     os.makedirs(output_dir, exist_ok=True)
 
@@ -486,6 +539,8 @@ def handle_build(args: argparse.Namespace) -> int:
         manifest["STAR_INTERVIEW_GUIDE.md"] = calculate_fingerprint(content)
 
     # Print summary output
+
+    # Human-readable summary of what was written, so a CI log shows which digests to expect.
     sys.stdout.write("\n=== DocForge Deterministic Build Complete ===\n")
     sys.stdout.write(f"Target Directory: {os.path.abspath(output_dir)}\n\n")
     sys.stdout.write(f"{'Artifact File':<28} | {'SHA-256 Digest'}\n")
@@ -500,6 +555,15 @@ def handle_build(args: argparse.Namespace) -> int:
 def handle_init(args: argparse.Namespace) -> int:
     """
     Executes the `init` subcommand: scaffolds a new starter specification JSON file.
+
+    Args:
+        args: Namespace with `output` (path), `template` (one of TEMPLATE_NAMES) and `force`.
+
+    Returns:
+        0 on success; 1 if the target exists and `--force` was not given.
+
+    Side effects:
+        Creates parent directories and writes the JSON file (UTF-8, 2-space indent).
     """
     output_path = args.output
     # Refuse to clobber an existing spec unless --force is given; hand-edited specs are valuable.
@@ -509,6 +573,7 @@ def handle_init(args: argparse.Namespace) -> int:
         )
         return 1
 
+    # `docforge init` scaffolds a spec the user then edits; --template picks one of TEMPLATE_NAMES.
     template_data = generate_starter_template(getattr(args, "template", "microservice"))
 
     # dirname is '' for a bare filename; only create directories when a parent path was given.
@@ -520,6 +585,7 @@ def handle_init(args: argparse.Namespace) -> int:
         # indent=2 keeps the scaffolded spec readable and diff-friendly for hand editing.
         json.dump(template_data, f, indent=2, ensure_ascii=False)
 
+    # Tell the user the exact next command so the scaffold-then-build workflow is discoverable.
     sys.stdout.write(f"Scaffolded new DocForge architecture specification: {os.path.abspath(output_path)}\n")
     sys.stdout.write("Run 'docforge build -i " + output_path + "' to compile into Markdown whitepapers.\n")
     return 0
@@ -529,6 +595,13 @@ def handle_validate(args: argparse.Namespace) -> int:
     """
     Executes the `validate` subcommand: runs static checks on DAG cycles,
     unmitigated security threats, and ADR consistency.
+
+    Args:
+        args: Namespace with `input`, the spec JSON path.
+
+    Returns:
+        0 if all three checkers report nothing; 1 on a missing/invalid file or any issue.
+        This is the exit status CI uses to gate merges (see the verification_gates in the spec).
     """
     input_path = args.input
     if not os.path.isfile(input_path):
@@ -580,6 +653,13 @@ def handle_validate(args: argparse.Namespace) -> int:
 def handle_verify_hash(args: argparse.Namespace) -> int:
     """
     Executes the `verify-hash` subcommand: checks if document content matches embedded SHA-256.
+
+    Args:
+        args: Namespace with `file`, a Markdown document produced by `build`.
+
+    Returns:
+        0 if the embedded digest equals the digest recomputed from the content; 1 if the
+        file is missing, has no stamp, or was edited after it was generated.
     """
     file_path = args.file
     if not os.path.isfile(file_path):
@@ -610,9 +690,15 @@ def handle_verify_hash(args: argparse.Namespace) -> int:
 # Argument Parser Construction
 # ===========================================================================
 
+# Pure function: builds a fresh parser every call (no globals), which keeps tests independent.
+# The four subparsers mirror the handlers above: build, init, validate, verify-hash.
 def build_parser() -> argparse.ArgumentParser:
     """
     Constructs the standard library ArgumentParser with intuitive CLI subcommands.
+
+    Returns:
+        A parser with subcommands build, init, validate and verify-hash; no global state is
+        touched, so it is safe to call repeatedly (tests do).
     """
     parser = argparse.ArgumentParser(
         prog="docforge",
@@ -696,8 +782,16 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Optional[List[str]] = None) -> int:
     """
     Main entry point for command-line execution.
+
+    Args:
+        argv: Argument list without the program name; None means use sys.argv[1:].
+
+    Returns:
+        The handler's exit code, or 1 (after printing help to stderr) when no subcommand was given.
     """
     # Parser is built fresh per call so main(argv) is re-entrant and unit-testable.
+
+    # Return codes from main() become the process exit status in __main__.py, which CI relies on.
     parser = build_parser()
     args = parser.parse_args(argv)
 
@@ -719,5 +813,6 @@ def main(argv: Optional[List[str]] = None) -> int:
     return 0
 
 
+# Allows `python -m docforge.cli` as well as the packaged entry point.
 if __name__ == "__main__":
     sys.exit(main())
