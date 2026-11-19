@@ -50,12 +50,86 @@ from docforge.models import ArchSpec
 # Starter Templates for `docforge init`
 # ===========================================================================
 
+# Names accepted by `docforge init --template` (kept in sync with the argparse choices below).
+TEMPLATE_NAMES = ("microservice", "security-gateway", "data-pipeline")
+
+# Per-template overrides applied on top of the microservice sample. Each entry replaces the
+# identity text and the five component names (same order/dependency shape as the base graph:
+# root -> verifier -> decision -> {publisher, upstream}); threats are re-pointed at the new
+# names so the spec still validates. ADRs, STAR stories and Q&A stay as the shared sample.
+_TEMPLATE_VARIANTS = {
+    "security-gateway": {
+        "system_name": "SentinelGate API Gateway",
+        "document_id": "RFC-2026-SENTINEL",
+        "executive_summary": (
+            "SentinelGate is a zero-trust API gateway that authenticates every request, enforces "
+            "per-route authorization policy, and records a tamper-evident audit trail."
+        ),
+        "architecture_overview": (
+            "Requests enter through a WAF-fronted listener, are authenticated, authorized against "
+            "central policy, and then forwarded to protected backends; every decision is logged."
+        ),
+        "components": ["WafListener", "TokenAuthenticator", "PolicyEnforcer", "AuditSink", "BackendRouter"],
+        "environment": "Edge / DMZ Gateway Cluster",
+    },
+    "data-pipeline": {
+        "system_name": "FlowForge Data Pipeline",
+        "document_id": "RFC-2026-FLOWFORGE",
+        "executive_summary": (
+            "FlowForge is a batch and streaming data pipeline that ingests raw events, validates "
+            "and enriches them, and publishes curated datasets with full lineage."
+        ),
+        "architecture_overview": (
+            "Producers write to an ingestion queue; a schema validator and enrichment stage feed "
+            "a lineage recorder and the curated warehouse loader."
+        ),
+        "components": ["IngestionQueue", "SchemaValidator", "EnrichmentEngine", "LineageRecorder", "WarehouseLoader"],
+        "environment": "Cloud Data Platform",
+    },
+}
+
+
 def generate_starter_template(template_name: str = "microservice") -> dict:
     """
     Returns a comprehensive, ready-to-customize architectural specification dictionary.
+
+    Args:
+        template_name: One of TEMPLATE_NAMES. "microservice" is the original AegisCore sample;
+            the other two reuse its structure with their own system identity, component names
+            and re-pointed threats (see _TEMPLATE_VARIANTS).
+
+    Returns:
+        A fresh spec dict (safe for the caller to mutate).
+
+    Raises:
+        ValueError: If template_name is not one of TEMPLATE_NAMES. The argument used to be
+            silently ignored, so every template produced the same AegisCore sample.
     """
-    # NOTE: `template_name` is accepted (and `--template` offers three choices) but this function
-    # currently returns the same single sample spec for every value. Left as-is in this comments-only pass.
+    if template_name not in TEMPLATE_NAMES:
+        raise ValueError(f"unknown template {template_name!r}; choose from {', '.join(TEMPLATE_NAMES)}")
+    spec = _microservice_template()
+    variant = _TEMPLATE_VARIANTS.get(template_name)
+    if variant is None:
+        return spec
+
+    # Map each original component name to its replacement (same position in the list).
+    renames = {c["name"]: new for c, new in zip(spec["components"], variant["components"])}
+    for comp in spec["components"]:
+        comp["name"] = renames[comp["name"]]
+        comp["dependencies"] = [renames[d] for d in comp["dependencies"]]
+    for threat in spec["threat_model"]["threats"]:
+        threat["component"] = renames.get(threat["component"], threat["component"])
+    spec["system_name"] = variant["system_name"]
+    spec["threat_model"]["system_name"] = variant["system_name"]
+    spec["document_id"] = variant["document_id"]
+    spec["executive_summary"] = variant["executive_summary"]
+    spec["architecture_overview"] = variant["architecture_overview"]
+    spec["metadata"]["environment"] = variant["environment"]
+    return spec
+
+
+def _microservice_template() -> dict:
+    """The original AegisCore sample spec; base for every template."""
     # The sample is intentionally rich so it exercises every section of the whitepaper.
     return {
         "system_name": "AegisCore Service Mesh",

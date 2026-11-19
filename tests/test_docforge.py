@@ -529,6 +529,29 @@ class TestCLIExecution(unittest.TestCase):
         rc = handle_validate(args)
         self.assertEqual(rc, 0)
 
+    def test_init_template_argument_is_honoured(self) -> None:
+        """Regression: `--template` used to be ignored, so every template was the same sample.
+
+        Each template must differ from the others, still validate, and unknown names must be
+        rejected by generate_starter_template instead of silently falling back.
+        """
+        from docforge.cli import generate_starter_template
+
+        parser = build_parser()
+        names = set()
+        for template in ("microservice", "security-gateway", "data-pipeline"):
+            spec_path = os.path.join(self.test_dir, f"{template}.json")
+            args = parser.parse_args(["init", "-o", spec_path, "--template", template])
+            self.assertEqual(handle_init(args), 0)
+            with open(spec_path, encoding="utf-8") as fh:
+                names.add(json.load(fh)["system_name"])
+            # Every generated template must pass the same validation as the default one.
+            self.assertEqual(handle_validate(parser.parse_args(["validate", "-i", spec_path])), 0)
+        self.assertEqual(len(names), 3)
+
+        with self.assertRaises(ValueError):
+            generate_starter_template("no-such-template")
+
     def test_cli_build_and_verify_hash(self) -> None:
         spec_path = os.path.join(self.test_dir, "spec.json")
         out_dir = os.path.join(self.test_dir, "build_out")
