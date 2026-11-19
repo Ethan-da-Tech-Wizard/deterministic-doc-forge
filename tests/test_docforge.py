@@ -567,10 +567,12 @@ class TestCLIExecution(unittest.TestCase):
     Tests end-to-end CLI subcommands: init, build, validate, verify-hash.
     """
 
+    # Pairs with tearDown below.
     def setUp(self) -> None:
         # Each test gets its own temp dir so generated files never touch the repo.
         self.test_dir = tempfile.mkdtemp(prefix="docforge_test_")
 
+    # Guarded so a test that already removed its directory does not error in cleanup.
     def tearDown(self) -> None:
         if os.path.exists(self.test_dir):
             shutil.rmtree(self.test_dir)
