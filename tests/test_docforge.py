@@ -264,15 +264,25 @@ class TestADRManager(unittest.TestCase):
     """
 
     def test_duplicate_adr_id_rejected(self) -> None:
+        """Adding two ADRs with the same id must raise ValueError.
+
+        Scenario: ADR-01 is registered, then a second record reuses the id. Ids are the key other
+        records use in `superseded_by`, so a silent overwrite would corrupt the supersede graph.
+        """
         manager = ADRManager()
         adr1 = ADR(id="ADR-01", title="First", status=ADRStatus.ACCEPTED, date="2026-01-01", context="C", decision="D")
         adr2 = ADR(id="ADR-01", title="Second", status=ADRStatus.PROPOSED, date="2026-01-02", context="C", decision="D")
-        # Two 10+ char-failing fields ('Short') must each produce their own issue message.
+        # The first registration succeeds; only the repeated id below must be rejected.
         manager.add_adr(adr1)
         with self.assertRaises(ValueError):
             manager.add_adr(adr2)
 
     def test_adr_lifecycle_validation_and_cycles(self) -> None:
+        """validate_lifecycle flags ADRs whose context/decision text is too short.
+
+        Scenario: a PROPOSED ADR with 5-character fields. Guards against empty boilerplate records
+        reaching the published ADR log.
+        """
         manager = ADRManager()
         # Missing context and decision
         adr1 = ADR(id="ADR-01", title="First", status=ADRStatus.PROPOSED, date="2026-01-01", context="Short", decision="Short")
@@ -282,6 +292,11 @@ class TestADRManager(unittest.TestCase):
         self.assertTrue(any("insufficient or missing 'decision'" in i for i in issues))
 
     def test_circular_supersede_detection(self) -> None:
+        """Two ADRs that supersede each other are reported as a circular supersede chain.
+
+        Scenario: ADR-01 -> ADR-02 -> ADR-01. Without the check, anything walking the chain to
+        find the 'current' decision would loop forever.
+        """
         manager = ADRManager()
         adr1 = ADR(
             id="ADR-01",
@@ -307,6 +322,10 @@ class TestADRManager(unittest.TestCase):
         self.assertTrue(any("Circular supersede cycle detected" in i for i in issues))
 
     def test_render_summary_table(self) -> None:
+        """The ADR summary table lists the id in bold and the status as an inline code badge.
+
+        Scenario: one ACCEPTED ADR. Pins the Markdown format the whitepaper embeds.
+        """
         manager = ADRManager()
         adr = ADR(
             id="ADR-01",
@@ -328,6 +347,11 @@ class TestSTRIDEAnalyzer(unittest.TestCase):
     """
 
     def test_unmitigated_critical_threat_flagged(self) -> None:
+        """A CRITICAL threat with an empty mitigation is reported by validate_threats.
+
+        Scenario: the mitigation field is deliberately blank. This is the rule the 'STRIDE Critical Threat
+        Mitigation Gate' CI check depends on, so it must never silently pass.
+        """
         tm = ThreatModel(
             system_name="InsecureSys",
             threats=[
@@ -348,6 +372,10 @@ class TestSTRIDEAnalyzer(unittest.TestCase):
         self.assertTrue(any("lacks an actionable mitigation specification" in i for i in issues))
 
     def test_statistics_and_table_rendering(self) -> None:
+        """Summary statistics count threats by risk level and the matrix table lists every threat id.
+
+        Scenario: one HIGH and one MEDIUM threat on the same component.
+        """
         tm = ThreatModel(
             system_name="SecureSys",
             threats=[
@@ -390,6 +418,10 @@ class TestSTARGuideGenerator(unittest.TestCase):
     """
 
     def test_render_star_story(self) -> None:
+        """A STAR story renders its heading, bold metric labels and technical deep-dive bullets.
+
+        Scenario: one fully populated story. Pins the interview-guide Markdown layout.
+        """
         story = STARStory(
             id="STAR-01",
             title="Ingress Overhaul",
@@ -408,6 +440,10 @@ class TestSTARGuideGenerator(unittest.TestCase):
         self.assertIn("Epoll event loop", md)
 
     def test_render_defense_qa(self) -> None:
+        """A defense Q&A entry renders numbered questions plus the anti-pattern and probe sections.
+
+        Scenario: a single question with all four fields set.
+        """
         qa = STARDefenseQA(
             question="Why not fail open?",
             answer="Failing open creates an exploitable security loophole.",
@@ -428,6 +464,10 @@ class TestDAGAndEngine(unittest.TestCase):
     """
 
     def test_topological_sort_linear(self) -> None:
+        """Kahn's algorithm layers a linear chain correctly whatever the input order.
+
+        Scenario: C3 -> C2 -> C1 given in scrambled order; expects layers [[C1],[C2],[C3]] and no cycles.
+        """
         components = [
             Component(name="C3", tier="DB", description="", dependencies=["C2"]),
             Component(name="C1", tier="Ingress", description="", dependencies=[]),
@@ -439,6 +479,10 @@ class TestDAGAndEngine(unittest.TestCase):
         self.assertEqual(layers, [["C1"], ["C2"], ["C3"]])
 
     def test_cycle_detection(self) -> None:
+        """A two-node dependency loop is reported as a cycle instead of looping or crashing.
+
+        Scenario: ServiceA and ServiceB depend on each other.
+        """
         components = [
             Component(name="ServiceA", tier="Core", description="", dependencies=["ServiceB"]),
             Component(name="ServiceB", tier="Core", description="", dependencies=["ServiceA"]),
@@ -449,6 +493,10 @@ class TestDAGAndEngine(unittest.TestCase):
         self.assertIn("Cyclic dependency detected", cycles[0])
 
     def test_ascii_and_mermaid_rendering(self) -> None:
+        """Both diagram renderers include every component and the expected edge syntax.
+
+        Scenario: Router -> Worker. Checks the ASCII banner and the Mermaid `flowchart TD` edge label.
+        """
         components = [
             Component(name="Router", tier="Ingress", description="Ingress", dependencies=[]),
             Component(name="Worker", tier="Compute", description="Backend", dependencies=["Router"]),
@@ -469,6 +517,11 @@ class TestCryptographicFingerprinting(unittest.TestCase):
     """
 
     def test_canonicalize_and_hash(self) -> None:
+        """Fingerprints are computed over canonicalized text (CRLF and trailing spaces removed).
+
+        Scenario: the same document with Windows line endings and trailing whitespace hashes the
+        same as its canonical form, so editors and OSes cannot cause false tamper alarms.
+        """
         raw_doc = "# Title \r\n\r\nSome content with trailing spaces    \r\n"
         canonical = canonicalize_markdown(raw_doc)
         self.assertNotIn("\r", canonical)
@@ -481,6 +534,10 @@ class TestCryptographicFingerprinting(unittest.TestCase):
         self.assertEqual(h1, h2)
 
     def test_embed_and_verify(self) -> None:
+        """A freshly stamped document verifies, and the embedded digest is 64 hex characters.
+
+        Scenario: embed_fingerprint then verify_fingerprint round trip.
+        """
         raw_doc = "# Architectural Whitepaper\n\nSystem specification content."
         stamped_doc = embed_fingerprint(raw_doc)
 
@@ -490,6 +547,10 @@ class TestCryptographicFingerprinting(unittest.TestCase):
         self.assertEqual(len(embedded), 64)
 
     def test_tamper_detection(self) -> None:
+        """Editing a stamped document without re-stamping makes verification fail.
+
+        Scenario: replace words in the body, keep the old digest. This is the attack verify-hash exists to catch.
+        """
         raw_doc = "# Architectural Whitepaper\n\nOriginal content."
         stamped_doc = embed_fingerprint(raw_doc)
 
@@ -515,6 +576,10 @@ class TestCLIExecution(unittest.TestCase):
             shutil.rmtree(self.test_dir)
 
     def test_cli_init_and_validate(self) -> None:
+        """`init` scaffolds a spec that immediately passes `validate` (exit code 0 for both).
+
+        Scenario: default template written to a temp directory.
+        """
         spec_path = os.path.join(self.test_dir, "test_spec.json")
 
         # 1. Execute `init`
@@ -553,6 +618,10 @@ class TestCLIExecution(unittest.TestCase):
             generate_starter_template("no-such-template")
 
     def test_cli_build_and_verify_hash(self) -> None:
+        """`build` writes a verifiable whitepaper, and appending to it afterwards breaks verify-hash.
+
+        Scenario: init -> build -> verify (expect 0) -> append text -> verify (expect 1).
+        """
         spec_path = os.path.join(self.test_dir, "spec.json")
         out_dir = os.path.join(self.test_dir, "build_out")
 
