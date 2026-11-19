@@ -1,7 +1,11 @@
+# Build system (PEP 517/518): pip installs setuptools >= 61 (first release with full [project] support) and builds
+# the wheel with its standard backend.
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
+# Core metadata. The project is zero-dependency by design (there is no `dependencies` key): the engine uses only the
+# standard library, which keeps documentation builds reproducible and offline-friendly. 3.9 is the minimum supported interpreter.
 [project]
 name = "deterministic-doc-forge"
 version = "1.0.0"
@@ -15,6 +19,7 @@ authors = [
 maintainers = [
     {name = "TWU LLC", email = "ethan@twu.software"}
 ]
+# Search keywords for package indexes (no effect on behaviour).
 keywords = [
     "architecture",
     "documentation",
@@ -28,6 +33,7 @@ keywords = [
     "dag",
     "zero-dependency"
 ]
+# Trove classifiers: audience, topic, supported Python versions; OS Independent because nothing is platform specific.
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
@@ -47,13 +53,16 @@ classifiers = [
     "Topic :: Software Development :: Build Tools",
 ]
 
+# Links rendered on the project page.
 [project.urls]
 Homepage = "https://github.com/Ethan-da-Tech-Wizard/deterministic-doc-forge"
 Repository = "https://github.com/Ethan-da-Tech-Wizard/deterministic-doc-forge"
 "Issue Tracker" = "https://github.com/Ethan-da-Tech-Wizard/deterministic-doc-forge/issues"
 
+# Installs a `docforge` console command that calls docforge.cli:main (the same entry as `python -m docforge`).
 [project.scripts]
 docforge = "docforge.cli:main"
 
+# Package only docforge/ (and subpackages); tests, docs and examples are not installed.
 [tool.setuptools.packages.find]
 include = ["docforge*"]
