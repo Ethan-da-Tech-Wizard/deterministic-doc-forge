@@ -36,6 +36,8 @@ import sys
 import tempfile
 import unittest
 
+# Tests import from the package by name, so run them from the repo root
+# (e.g. `python3 -m unittest discover -s tests -t .` or with PYTHONPATH set to the root).
 from docforge.adr import ADRManager
 from docforge.cli import build_parser, handle_build, handle_init, handle_validate, handle_verify_hash, main
 from docforge.engine import (
@@ -265,6 +267,7 @@ class TestADRManager(unittest.TestCase):
         manager = ADRManager()
         adr1 = ADR(id="ADR-01", title="First", status=ADRStatus.ACCEPTED, date="2026-01-01", context="C", decision="D")
         adr2 = ADR(id="ADR-01", title="Second", status=ADRStatus.PROPOSED, date="2026-01-02", context="C", decision="D")
+        # Two 10+ char-failing fields ('Short') must each produce their own issue message.
         manager.add_adr(adr1)
         with self.assertRaises(ValueError):
             manager.add_adr(adr2)
@@ -430,6 +433,7 @@ class TestDAGAndEngine(unittest.TestCase):
             Component(name="C1", tier="Ingress", description="", dependencies=[]),
             Component(name="C2", tier="Logic", description="", dependencies=["C1"]),
         ]
+        # Input is deliberately unsorted (C3, C1, C2): layering must come from dependencies, not list order.
         layers, cycles = topological_sort_components(components)
         self.assertEqual(len(cycles), 0)
         self.assertEqual(layers, [["C1"], ["C2"], ["C3"]])
@@ -439,6 +443,7 @@ class TestDAGAndEngine(unittest.TestCase):
             Component(name="ServiceA", tier="Core", description="", dependencies=["ServiceB"]),
             Component(name="ServiceB", tier="Core", description="", dependencies=["ServiceA"]),
         ]
+        # A <-> B never reaches in-degree 0, so both stay unprocessed and are reported as cyclic.
         layers, cycles = topological_sort_components(components)
         self.assertTrue(len(cycles) > 0)
         self.assertIn("Cyclic dependency detected", cycles[0])
@@ -469,6 +474,7 @@ class TestCryptographicFingerprinting(unittest.TestCase):
         self.assertNotIn("\r", canonical)
         self.assertFalse(canonical.endswith(" "))
 
+        # Hashing the raw text and its canonical form must agree: canonicalization is idempotent.
         h1 = calculate_fingerprint(raw_doc)
         h2 = calculate_fingerprint(canonical)
         # Should be identical because canonicalize normalizes both
@@ -488,6 +494,7 @@ class TestCryptographicFingerprinting(unittest.TestCase):
         stamped_doc = embed_fingerprint(raw_doc)
 
         # Introduce 1-byte tamper modification
+        # Edit the body but leave the embedded hash alone: this is exactly what the CI gate must catch.
         tampered_doc = stamped_doc.replace("Original content", "Tampered content")
         is_valid, embedded, computed = verify_fingerprint(tampered_doc)
         self.assertFalse(is_valid)
@@ -500,6 +507,7 @@ class TestCLIExecution(unittest.TestCase):
     """
 
     def setUp(self) -> None:
+        # Each test gets its own temp dir so generated files never touch the repo.
         self.test_dir = tempfile.mkdtemp(prefix="docforge_test_")
 
     def tearDown(self) -> None:
@@ -544,6 +552,8 @@ class TestCLIExecution(unittest.TestCase):
         self.assertEqual(rc, 0)
 
         # Tamper with the whitepaper
+        # Appending after the stamp changes the canonical content but not the embedded hash,
+        # so verify-hash must now return 1.
         with open(whitepaper_path, "a", encoding="utf-8") as f:
             f.write("\n<!-- Malicious unauthorized injection -->\n")
 

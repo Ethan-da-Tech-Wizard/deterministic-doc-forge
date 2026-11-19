@@ -44,6 +44,7 @@ defensible answers with explicit notes on anti-patterns to avoid.
 from __future__ import annotations
 
 from typing import Dict, List, Optional
+# Only the dataclasses are needed; Dict is imported but unused.
 from docforge.models import STARDefenseQA, STARStory
 
 
@@ -61,6 +62,7 @@ class STARGuideGenerator:
         """
         Initializes the generator with optional collections of stories and defense Q&A.
         """
+        # `or []` normalizes None to a fresh empty list so later code never needs a None check.
         self.stories: List[STARStory] = stories or []
         self.defense_qa: List[STARDefenseQA] = defense_qa or []
 
@@ -74,6 +76,7 @@ class STARGuideGenerator:
 
         sections: List[str] = []
 
+        # Sort by ID, not input order, so output bytes (and the SHA-256) don't depend on JSON ordering.
         for story in sorted(self.stories, key=lambda s: s.id):
             sec: List[str] = []
             sec.append(f"### Story [{story.id}]: {story.title}")
@@ -81,6 +84,7 @@ class STARGuideGenerator:
             sec.append("")
 
             # Quantified Impact Highlights
+            # Metrics are the quantified 'R' of STAR; the block is omitted entirely when none are supplied.
             if story.metrics:
                 sec.append("#### Quantified Business & System Impact (The 'R' Metrics):")
                 for metric_name, metric_val in story.metrics.items():
@@ -88,6 +92,7 @@ class STARGuideGenerator:
                 sec.append("")
 
             # STAR Framework Breakdown
+            # Each STAR field is emitted with an explicit label; the embedded \n keeps the body on its own line.
             sec.append("#### STAR Narrative Structure:")
             sec.append(f"**Situation (Context & Scale):**\n{story.situation}\n")
             sec.append(f"**Task (Ownership & Objective):**\n{story.task}\n")
@@ -115,6 +120,7 @@ class STARGuideGenerator:
 
         sections: List[str] = []
 
+        # Q&A keeps the author's order (it is intentional: easy questions first) and numbers from 1.
         for idx, qa in enumerate(self.defense_qa, 1):
             sec: List[str] = []
             sec.append(f"#### Q{idx}: \"{qa.question}\"")
@@ -123,6 +129,7 @@ class STARGuideGenerator:
             sec.append(f"> {qa.answer}")
             sec.append("")
 
+            # Optional fields are rendered only when present to avoid empty headings.
             if qa.anti_pattern_to_avoid:
                 sec.append("**Trap / Anti-Pattern to Avoid:**")
                 sec.append(f"⚠️ _{qa.anti_pattern_to_avoid}_")
@@ -150,6 +157,7 @@ class STARGuideGenerator:
         )
         parts.append("")
 
+        # Standalone-document wrapper: intro paragraph, then stories, then Q&A.
         parts.append("### 1. High-Impact STAR Stories")
         parts.append(self.render_stories_markdown())
         parts.append("")

@@ -54,6 +54,7 @@ import json
 import os
 import re
 import sys
+# pathlib.Path is used for all filesystem access; nothing here imports or executes analysed code.
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -118,6 +119,8 @@ class ProjectAnalyzer:
         Returns:
             Dict containing detected container architecture metadata, stages, and security controls.
         """
+        # `info` is the full result shape; returning it unchanged (present=False) for a missing file
+        # keeps callers free of None checks.
         target = dockerfile_path or (self.root / "Dockerfile")
         info: Dict[str, Any] = {
             "present": False,
@@ -152,12 +155,17 @@ class ProjectAnalyzer:
                     # parts[1] holds the image tag (e.g., python:3.12-slim-bookworm)
                     info["base_images"].append(parts[1])
                 # Check for multi-stage alias: "FROM <image> AS <stage_name>"
+                # Heuristic: the alias is the token after the last 'AS '. Upper-casing handles lowercase `as`,
+                # but it also means a base image tag containing 'AS ' text would confuse it (rare).
                 if "AS " in line_clean.upper():
                     # Split on case-insensitive 'AS ' and extract the identifier
+                    # Stage names are upper-cased only to split on the keyword; they are lower-cased again when stored.
                     stage_name = line_clean.upper().split("AS ")[-1].strip().split()[0]
                     info["stages"].append(stage_name.lower())
 
             # Detect least-privilege non-root user assignments
+            # Last USER wins, which matches Docker semantics (the final USER sets the runtime user).
+            # No check is made that the user is actually non-root (e.g. `USER root` is still recorded).
             elif line_clean.startswith("USER "):
                 user_spec = line_clean.split()[1]
                 info["non_root_user"] = user_spec
@@ -176,6 +184,7 @@ class ProjectAnalyzer:
                     info["security_features"].append("Exec-form entrypoint array preserves POSIX PID 1 signal handling")
 
         # Synthesize multi-stage build security advantage if multiple stages were discovered
+        # Needs at least two named stages: an unnamed multi-stage build is not detected.
         if len(info["stages"]) > 1:
             stage_chain = " -> ".join(info["stages"])
             info["security_features"].append(f"Multi-stage build separation ({stage_chain}) strips compilers from runtime")
@@ -212,6 +221,7 @@ class ProjectAnalyzer:
             return workflows
 
         # Statically scan all YAML/YML files in the workflows directory using stdlib regex (zero PyYAML dependency)
+        # Sorted for deterministic output order; the glob matches .yml and .yaml.
         for yml_file in sorted(workflows_dir.glob("*.y*ml")):
             text = yml_file.read_text(encoding="utf-8", errors="replace")
             wf: Dict[str, Any] = {
@@ -228,6 +238,7 @@ class ProjectAnalyzer:
                 wf["name"] = name_match.group(1).strip().strip("'\"")
 
             # Check for standard static analysis, SAST, and container security tools
+            # Scanner detection is a plain substring match, so a tool mentioned only in a comment still counts.
             text_lower = text.lower()
             if "shellcheck" in text_lower:
                 wf["security_scans"].append("ShellCheck static shell script linting")
@@ -241,12 +252,15 @@ class ProjectAnalyzer:
                 wf["security_scans"].append("SPDX-JSON Software Bill of Materials (SBOM) generation")
 
             # Extract Python runtime matrix versions (e.g., `python-version: ['3.10', '3.12']`)
+            # Only the inline-list form `python-version: [..]` is recognised; block-style YAML lists are not.
             matrix_match = re.search(r"python-version:\s*\[(.*?)\]", text)
             if matrix_match:
                 raw_versions = matrix_match.group(1).split(",")
                 wf["matrix_versions"] = [v.strip().strip("'\"") for v in raw_versions if v.strip()]
 
             # Extract top-level job identifiers under the `jobs:` key
+            # Jobs are any 2-space-indented keys, which also catches other mappings at that depth, hence
+            # the filter on 'strategy' below. This is an approximation, not a YAML parse.
             jobs_match = re.findall(r"^  ([a-zA-Z0-9_-]+):", text, re.MULTILINE)
             wf["jobs"] = [j for j in jobs_match if j != "strategy"]
 
@@ -272,6 +286,7 @@ class ProjectAnalyzer:
         """
         scripts_dir = self.root / "scripts"
         results: List[Dict[str, Any]] = []
+        # Prefer ./scripts; fall back to scanning the project root when there is no scripts directory.
         target_dir = scripts_dir if scripts_dir.is_dir() else self.root
 
         for py_file in sorted(target_dir.glob("*.py")):
@@ -299,6 +314,7 @@ class ProjectAnalyzer:
                 pass
 
             # Detect low-level network socket listener binding
+            # Feature detection below is substring-based on the raw source, so it is fast but can false-positive.
             if "socket.socket" in src or "bind(" in src:
                 meta["features"].append("Network socket service")
 
@@ -353,8 +369,11 @@ class WhitepaperGenerator:
         docker_info = self.analyzer.inspect_dockerfile()
         workflows = self.analyzer.inspect_workflows()
         scripts = self.analyzer.inspect_python_scripts()
+        # Whitepaper text is mostly fixed boilerplate; only the project name, Dockerfile facts and
+        # workflow facts are data-driven. This keeps the output byte-for-byte reproducible.
         project_name = self.analyzer.root.name
 
+        # Accumulate lines and join once at the end; cheaper than repeated string concatenation.
         doc: List[str] = []
 
         # ======================================================================
@@ -387,6 +406,7 @@ class WhitepaperGenerator:
         # ======================================================================
         doc.append("## 2. Container Architecture & Least-Privilege Hardening")
         doc.append("")
+        # Branch on the analyzer result so the document never claims hardening that wasn't detected.
         if docker_info["present"]:
             doc.append(f"- **Base Image Profile:** `{', '.join(docker_info['base_images'])}`")
             stages_desc = ', '.join(docker_info['stages']) or 'single'
@@ -511,6 +531,7 @@ class WhitepaperGenerator:
         """
         project_name = self.analyzer.root.name
         docker_info = self.analyzer.inspect_dockerfile()
+        # (workflows is read here but this ADR text is static; only the Dockerfile stages are interpolated.)
         workflows = self.analyzer.inspect_workflows()
 
         doc: List[str] = [
@@ -655,6 +676,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(
         description="Deterministic Technical Document & Whitepaper Generator (twu_docgen)"
     )
+    # required=True: argparse prints usage and exits with status 2 when no subcommand is given.
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     # Subcommand: analyze
@@ -687,9 +709,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     sub_star.add_argument("--path", default=".", help="Target project root directory")
     sub_star.add_argument("--output", help="Optional output filepath to save Markdown STAR guide")
 
+    # Every subcommand shares the --path option; `analyze` prints JSON, the others emit Markdown
+    # to --output (creating parent directories) or to stdout.
     args = parser.parse_args(argv)
 
     try:
+        # Any failure (bad path, unreadable file) lands in the except below as a one-line error + exit 1.
         analyzer = ProjectAnalyzer(Path(args.path))
         generator = WhitepaperGenerator(analyzer)
 
@@ -707,6 +732,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             content = generator.generate(title=args.title)
             if args.output:
                 out_path = Path(args.output)
+                # Create the destination directory so --output works for fresh paths.
                 out_path.parent.mkdir(parents=True, exist_ok=True)
                 out_path.write_text(content, encoding="utf-8")
                 print(f"Generated whitepaper saved to: {out_path}")
@@ -758,6 +784,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 print(content)
             return 0
 
+    # Broad catch keeps the CLI from dumping tracebacks; message goes to stderr, exit code 1.
     except Exception as exc:
         sys.stderr.write(f"twu_docgen error: {exc}\n")
         return 1
