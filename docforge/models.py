@@ -234,6 +234,8 @@ class RiskLevel(str, Enum):
     INFORMATIONAL = "INFORMATIONAL"
 
     @classmethod
+    # Parsing is deliberately forgiving because values come from hand-edited JSON/YAML
+    # specs; see the fallback below.
     def from_string(cls, value: str) -> RiskLevel:
         # Exact (case-insensitive) match against member names; anything unrecognised becomes MEDIUM,
         # a neutral middle-of-the-road default.
@@ -292,6 +294,8 @@ class ThreatItem:
     mitigation_status: str = "IMPLEMENTED"
 
     @classmethod
+    # Build from a plain dict (parsed spec file). Missing keys get neutral defaults so a
+    # partly filled spec still renders; every text value is stripped of stray whitespace.
     def from_dict(cls, data: Dict[str, Any]) -> ThreatItem:
         return cls(
             id=str(data.get("id", "THREAT-00")).strip(),
@@ -306,6 +310,8 @@ class ThreatItem:
             mitigation_status=str(data.get("mitigation_status", "IMPLEMENTED")).strip().upper(),
         )
 
+    # Inverse of from_dict: enums are written as their string values so the result is
+    # JSON-serialisable and re-parses to an equal object.
     def to_dict(self) -> Dict[str, Any]:
         return {
             "id": self.id,
@@ -331,6 +337,8 @@ class ThreatModel:
     security_assumptions: List[str] = field(default_factory=list)
 
     @classmethod
+    # Parse a whole threat model; threat entries that are not objects are dropped so one
+    # bad row cannot block rendering of the others.
     def from_dict(cls, data: Dict[str, Any]) -> ThreatModel:
         raw_threats = data.get("threats", [])
         # Non-dict entries (null, strings) are skipped silently instead of crashing the parse.
@@ -342,6 +350,7 @@ class ThreatModel:
             security_assumptions=list(data.get("security_assumptions", [])),
         )
 
+    # Serialise to plain dicts/lists (JSON-ready), nesting each threat's own to_dict().
     def to_dict(self) -> Dict[str, Any]:
         return {
             "system_name": self.system_name,
@@ -382,6 +391,8 @@ class STARStory:
     technical_deep_dive: List[str] = field(default_factory=list)
 
     @classmethod
+    # Build a STAR (Situation/Task/Action/Result) interview story from a dict; missing
+    # fields default to empty text or a generic competency label.
     def from_dict(cls, data: Dict[str, Any]) -> STARStory:
         return cls(
             id=str(data.get("id", "STAR-01")).strip(),
@@ -395,6 +406,7 @@ class STARStory:
             technical_deep_dive=list(data.get("technical_deep_dive", [])),
         )
 
+    # Plain-dict form used by the JSON output and by round-trip tests.
     def to_dict(self) -> Dict[str, Any]:
         return {
             "id": self.id,
@@ -424,6 +436,7 @@ class STARDefenseQA:
     follow_up_probe: str
 
     @classmethod
+    # Build one interview-defense Q&A pair from a dict; absent fields become empty strings.
     def from_dict(cls, data: Dict[str, Any]) -> STARDefenseQA:
         return cls(
             question=str(data.get("question", "")).strip(),
@@ -432,6 +445,7 @@ class STARDefenseQA:
             follow_up_probe=str(data.get("follow_up_probe", "")).strip(),
         )
 
+    # Plain-dict form of the Q&A pair.
     def to_dict(self) -> Dict[str, Any]:
         return {
             "question": self.question,
