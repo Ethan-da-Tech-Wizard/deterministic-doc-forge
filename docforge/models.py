@@ -56,6 +56,11 @@ class ADRStatus(str, Enum):
     DEPRECATED = "DEPRECATED"  # Previously active, but no longer recommended for new systems
     SUPERSEDED = "SUPERSEDED"  # Replaced by a subsequent ADR (points to new ADR ID)
 
+    # State Machine: ADR Lifecycle Transitions
+    # PROPOSED -> ACCEPTED | REJECTED
+    # ACCEPTED -> DEPRECATED | SUPERSEDED
+    # REJECTED -> Terminal state
+    # DEPRECATED / SUPERSEDED -> Historical audit state
     def is_active(self) -> bool:
         """
         Determines if the architectural decision is currently active and governing production.
