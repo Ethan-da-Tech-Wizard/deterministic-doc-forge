@@ -16,7 +16,7 @@
 In software engineering and distributed infrastructure systems, documentation suffers from three fatal problems:
 1. **Architectural Archeology & Decision Drift:** Engineering teams reverse sound architectural decisions because the historical context, forces, constraints, and evaluated alternatives were never formally recorded in Architectural Decision Records (ADRs).
 2. **Security Compliance Theater:** Threat models are created as stale slide decks during initial security reviews, completely detached from codebase realities, container definitions, and CI/CD pipelines.
-3. **The "Staff-Plus Interview Wall":** Senior, Staff, and Principal engineers who design and ship complex distributed systems often struggle to defend their systems during high-stakes technical interviews (L5/L6/L7 panels, Architecture Review Boards, CISO audits) because their accomplishments aren't structured into quantified STAR narratives (Situation, Task, Action, Result) and rapid-fire trade-off defenses.
+3. **Communicating Complex Trade-offs:** Engineers who design and ship complex systems often struggle to clearly articulate why specific architectural choices were made because accomplishments and trade-offs aren't structured into clear narratives and verified rationale.
 4. **AI Non-Determinism & Hallucinations:** Relying on probabilistic Large Language Models (LLMs) to generate compliance documentation introduces fatal vulnerabilities: hallucinations of non-existent APIs, variable output across builds, external SaaS subscription costs, rate limits, and intellectual property exposure.
 
 DocForge uses code to generate structured documentation. Generated statements and threat models require human review against the actual system; deterministic output does not establish accuracy or security.
@@ -111,7 +111,7 @@ Generates records of the engineering decisions supplied in the input:
 - Records context, decision rationale, and quantified positive/negative trade-offs.
 
 ### 5. Amazon STAR Technical Defense Interview Guides
-Prepares senior and lead engineers for Staff/Principal (L5/L6/L7) panels, Architecture Review Boards (ARBs), and CISO reviews:
+Helps engineers clearly articulate system architecture, trade-offs, and technical rationale:
 - **Situation:** Quantified engineering challenges, scale requirements, and business constraints.
 - **Task:** Explicit ownership and architectural goals.
 - **Action:** Deep technical trade-offs, algorithms chosen (e.g. Kahn's DAG sort vs DFS), container hardening, and shift-left gates.
