@@ -8,9 +8,9 @@
 # ==============================================================================
 """scripts/twu_docgen.py — Deterministic Technical Document & Whitepaper Generator.
 
-Author: Ethan Kilmer <ethan@twu.software>
+Author: Ethan-da-Tech-Wizard
 Organization: TWU LLC
-License: MIT License (c) 2026 Ethan Kilmer <ethan@twu.software>, TWU LLC
+License: MIT License (c) 2026 Ethan-da-Tech-Wizard, TWU LLC
 
 Overview & Educational Architecture:
 ====================================
@@ -385,7 +385,7 @@ class WhitepaperGenerator:
         doc.append("**Document Identifier:** TWU-AUTODOC-2026-WP  ")
         doc.append("**Synthesis Methodology:** Deterministic Static AST & Workflow Inspection (Zero Model Calls)  ")
         doc.append("**Status:** Audit-Ready Technical Architecture Specification  ")
-        doc.append("**Author / Organization:** Ethan Kilmer <ethan@twu.software>, TWU LLC  ")
+        doc.append("**Author / Organization:** Ethan-da-Tech-Wizard, TWU LLC  ")
         doc.append("")
         doc.append("---")
         doc.append("")

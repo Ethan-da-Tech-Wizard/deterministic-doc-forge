@@ -58,7 +58,6 @@ Package Hierarchy:
 # Single source of truth for the version string; keep in sync with pyproject.toml.
 __version__: str = "1.0.0"
 __author__: str = "Ethan Kilmer"
-__email__: str = "ethan@twu.software"
 __license__: str = "MIT"
 # Names listed here define the public API (`from docforge import *`). Anything not
 # listed (e.g. canonicalize_markdown, topological_sort_components) is internal-by-convention

@@ -223,7 +223,7 @@ deterministic-doc-forge/
 │   └── sample_project.json   # Example microservice security gateway specification
 ├── docs/                     # Compiled documentation artifacts with SHA-256 audit stamps
 ├── pyproject.toml            # PEP 517/621 package specification
-└── LICENSE                   # MIT License (c) 2026 Ethan Kilmer <ethan@twu.software>, TWU LLC
+└── LICENSE                   # MIT License (c) 2026 Ethan-da-Tech-Wizard, TWU LLC
 ```
 
 ---
@@ -248,7 +248,7 @@ Test counts and results may change; use the commands above to check the current 
 
 Distributed under the MIT License. See [LICENSE](LICENSE) for full details.
 
-- **Author:** Ethan Kilmer ([ethan@twu.software](mailto:ethan@twu.software))
+- **Author:** Ethan-da-Tech-Wizard (https://github.com/Ethan-da-Tech-Wizard)
 - **Organization:** TWU LLC
-- **Copyright:** (c) 2026 Ethan Kilmer <ethan@twu.software>, TWU LLC
+- **Copyright:** (c) 2026 Ethan-da-Tech-Wizard, TWU LLC
 

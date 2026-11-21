@@ -8,9 +8,9 @@
 # ==============================================================================
 """scripts/test_twu_docgen.py — Unit test suite for twu_docgen.py.
 
-Author: Ethan Kilmer <ethan@twu.software>
+Author: Ethan-da-Tech-Wizard
 Organization: TWU LLC
-License: MIT License (c) 2026 Ethan Kilmer <ethan@twu.software>, TWU LLC
+License: MIT License (c) 2026 Ethan-da-Tech-Wizard, TWU LLC
 
 Educational Test Suite Overview:
 ================================
